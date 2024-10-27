@@ -1,22 +1,35 @@
-# agents/base.py
+# agent.py
 import os
 import aiohttp
-from typing import get_args, get_origin  # if we need advanced type checking
-
-from typing import Optional, Type, Union, List, Dict, Any
+from typing import Optional, Type, Union, List
 from dataclasses import dataclass
 from pydantic import BaseModel
 from openai import AsyncOpenAI
+import openai
 
-
-import requests
 import json
 from time import sleep
 from enum import Enum, auto
-from ..config.settings import get_settings
+from dotenv import load_dotenv
 
-settings = get_settings()
-aclient = AsyncOpenAI(api_key=settings.openai_api_key)
+@dataclass
+class Settings:
+    """Settings"""
+    openai_api_key: str = ""
+    ollama_host: str = ""
+
+    # initialize the settings
+    def __init__(self):
+        load_dotenv()
+        self.openai_api_key = os.getenv('OPENAI_API_KEY')
+        self.ollama_host = os.getenv('OLLAMA_HOST')
+
+        if not self.openai_api_key:
+            raise ValueError("OPENAI_API_KEY is not set in the environment.")
+        if not self.ollama_host:
+            raise ValueError("OLLAMA_HOST is not set in the environment.")
+    #
+#
 
 class ModelProvider(Enum):
     OPENAI = auto()
@@ -39,8 +52,6 @@ class Task:
     """Represents a specific task for an agent to perform"""
     description: str
     prompt_template: str
-    expected_output: str
-    agent: 'Agent'
     response_model: Optional[Type[BaseModel]] = None
 
     def format_prompt(self, **kwargs) -> str:
@@ -58,13 +69,14 @@ class ModelCaller:
     """Handles communication with different LLM providers"""
     def __init__(self):
         # Get settings from config/settings.py
-        settings = get_settings()
+        settings = Settings()
         self.openai_key = settings.openai_api_key
         self.ollama_host = settings.ollama_host
 
         if not self.openai_key:
             raise ConfigurationError("OPENAI_API_KEY not found in environment variables")
 
+        self.client = AsyncOpenAI()  # Initialize the async client
 
     def parse_model_string(self, model_string: str) -> tuple[ModelProvider, str]:
         """Parse a model string in the format 'provider|model_name'."""
@@ -118,41 +130,41 @@ class ModelCaller:
                     raise ModelCallError(f"Failed after {max_retries} attempts: {str(e)}")
                 sleep(2 ** attempt)  # Exponential backoff
 
+    # Adding detailed response validation
     async def _call_openai(
         self,
         model: str,
         system_prompt: str,
         prompt: str,
         temperature: float,
-        response_model: Optional[Type[BaseModel]] = None
-    ) -> Union[str, BaseModel]:
-        """Internal method to call OpenAI API."""
+        response_model: Optional[Type[BaseModel]] = None) -> Union[str, BaseModel]:
+
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt}
         ]
 
         if response_model:
-            # Add format instructions for structured output
-            model_schema = response_model.model_json_schema()
-            format_instructions = (
-                f"Return the response in the following JSON format:\n"
-                f"{json.dumps(model_schema, indent=2)}"
+            # Use openai.pydantic_function_tool directly
+            tool = openai.pydantic_function_tool(response_model)
+            completion = await self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                tools=[tool],
+                temperature=temperature
             )
-            messages.append({"role": "system", "content": format_instructions})
-
-            response = await aclient.chat.completions.create(model=model,
-            messages=messages,
-            temperature=temperature,
-            response_format={"type": "json_object"})
-
-            response_text = response.choices[0].message.content
-            return response_model.model_validate_json(response_text)
+            # Access the structured response within tool_calls
+            arguments = completion.choices[0].message.tool_calls[0].function.arguments
+            return response_model.parse_raw(arguments)
         else:
-            response = await aclient.chat.completions.create(model=model,
-            messages=messages,
-            temperature=temperature)
-            return response.choices[0].message.content
+            # Call OpenAI normally without schema enforcement for unstructured text
+            completion = await self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature
+            )
+            # Return the plain text response
+            return completion.choices[0].message.content
 
     async def _call_ollama(
         self,
@@ -192,9 +204,6 @@ class Agent:
         model_caller: Optional[ModelCaller] = None
     ):
 
-        # Use get_settings from config/settings.py
-        # settings = get_settings()
-
         self.name = name
         self.system_prompt = system_prompt
         self.model = model
@@ -223,3 +232,7 @@ class Agent:
 
     def __repr__(self):
         return f"{self.__class__.__name__}(name='{self.name}', model='{self.model}')"
+
+
+settings = Settings()
+aclient = AsyncOpenAI(api_key=settings.openai_api_key)
