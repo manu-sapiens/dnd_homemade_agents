@@ -487,11 +487,13 @@ task__enforce_dm = Task(
         {dm_output}
 
         Review this output to ensure:
-        - The DM does not dictate what players think, feel, or do without their explicit consent.
-        - Any description of player actions is a suggestion or possibility, not a decision.
+        - The DM does not dictate what players think or feel. 
+        - The DM does not dictate what a player do unless the player explictly attempted the action.
+        
+        The DM however is free to describe the environment, the NPCs and the consequences of the player's actions.
 
         Ideally, you will output the same text as you reviewed. However, if violations are found, 
-        revise the output to remove control over player actions while keeping narrative flow intact.
+        revise the output to remove the violations while keeping the narrative flow intact.
         """,
     response_model=None  # Can use a model for structured validation if needed
 )

@@ -1,11 +1,12 @@
 # run_game.py
 import asyncio
+import argparse
 from dnd.dnd_agents import Agent, player_agent, chronicler_agent, dm_agent, enforcer_agent
 from dnd.game_master import GameMaster, PlayerCharacter, CharacterSheet
 
 
 # Example of running the game
-async def main():
+async def main(initial_situation):
 
     # Create player agents -------------------------------------------
 
@@ -76,27 +77,32 @@ async def main():
         player_characters=player_characters,
         chronicler_agent=chronicler_agent,
         enforcer_agent=enforcer_agent,
-        initial_situation="""
-        The party stands at the entrance of the Crimson Crypt, an ancient tomb recently
-        uncovered in the forests north of the city. Local legends speak of powerful
-        magical artifacts sealed away here centuries ago. The stone doorway bears
-        mysterious runes, and a cold breeze emanates from within. The sun is setting,
-        casting long shadows through the trees.
-
-        The party has been hired by the Arcane Academy to investigate the tomb and
-        retrieve any magical artifacts, especially the rumored Orb of First Light.
-        However, they're not the only ones interested in the tomb's contents - they've
-        spotted signs of other adventurers in the area.
-        """
+        initial_situation=initial_situation
     )
-
-
 
     for player in player_characters:
         await game_master.execute_player_turn(player)
     #    
 
 # Run the main function (if using an async framework)
-import asyncio
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(description="Run the D&D game.")
+    parser.add_argument(
+        "--story",
+        type=str,
+        default=(
+            "The party stands at the entrance of the Crimson Crypt, an ancient tomb recently "
+            "uncovered in the forests north of the city. Local legends speak of powerful "
+            "magical artifacts sealed away here centuries ago. The stone doorway bears "
+            "mysterious runes, and a cold breeze emanates from within. The sun is setting, "
+            "casting long shadows through the trees.\n\n"
+            "The party has been hired by the Arcane Academy to investigate the tomb and "
+            "retrieve any magical artifacts, especially the rumored Orb of First Light. "
+            "However, they're not the only ones interested in the tomb's contents - they've "
+            "spotted signs of other adventurers in the area."
+        ),
+        help="The initial situation for the game session.",
+    )
+
+    args = parser.parse_args()
+    asyncio.run(main(args.story))

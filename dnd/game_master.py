@@ -242,10 +242,12 @@ class GameMaster:
                         character_name=character_name,
                         intended_action=result__intent
                     )
+
+                    result__player_feedback = await enforce_player(self.enforcer_agent, result__player_feedback, other_name)
                     result__feedbacks.append((other_name, result__player_feedback))
 
                     new_narrative = f"\n{other_name.upper()}:\n{result__player_feedback}\n"
-                    print(new_narrative)
+                    #print(new_narrative)
                     the_narrative += new_narrative
 
             # 6. Player makes final decision
