@@ -4,6 +4,8 @@ import argparse
 from dnd.dnd_agents import Agent, player_agent, chronicler_agent, dm_agent, enforcer_agent
 from dnd.game_master import GameMaster, PlayerCharacter, CharacterSheet
 
+DM_VOICE = "N2lVS1w4EtoT3dr4eOWO" # Callum's voice
+VERBOSE = False
 
 # Example of running the game
 async def main(initial_situation):
@@ -27,7 +29,8 @@ async def main(initial_situation):
             bonds=["sworn to defend the weak", "devoted to their deity"],
             flaws=["too trusting", "sees everything as good vs evil"],
             quirks=["always cleans their sword after battle", "prays before every meal"]
-        )
+        ),
+        character_voice="iP95p4xoKVk53GoZ742B" #Chris	
     )
 
     # Create Shadowstep the Rogue
@@ -47,7 +50,8 @@ async def main(initial_situation):
             bonds=["protective of street urchins", "owes a debt to a noble"],
             flaws=["greedy", "overconfident in their abilities"],
             quirks=["always checks for traps, even in safe places", "collects small trinkets"]
-        )
+        ),
+        character_voice="JBFqnCBsd6RMkjVDRZzb" # George
     )
 
     # Create Eldara the Wizard
@@ -67,7 +71,8 @@ async def main(initial_situation):
             bonds=["ancient magical texts", "wizard academy"],
             flaws=["overthinks simple problems", "dismissive of non-magical solutions"],
             quirks=["takes notes about everything", "speaks in unnecessarily complex terms"]
-        )
+        ),
+        character_voice="Xb7hH8MSUJpSbSDYk0k2" # Alice
     )
 
     player_characters = [brussae, shadowstep, eldara]
@@ -77,8 +82,15 @@ async def main(initial_situation):
         player_characters=player_characters,
         chronicler_agent=chronicler_agent,
         enforcer_agent=enforcer_agent,
-        initial_situation=initial_situation
+        initial_situation=initial_situation,
+        dm_voice=DM_VOICE 
     )
+
+    
+    from dnd.tts import enqueue_audio, tts_initialize
+    await tts_initialize()
+    if VERBOSE: await enqueue_audio("Welcome to the game! I am the Dungeon Master. Let's begin.", DM_VOICE)
+    if VERBOSE: await enqueue_audio(initial_situation, DM_VOICE)
 
     print("Starting the game... v 0.2 \n--------------------\n")
     print(initial_situation)

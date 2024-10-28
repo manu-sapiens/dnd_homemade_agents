@@ -251,10 +251,13 @@ task__make_decision = Task(
     response_model=None  # Replace with appropriate Pydantic model if needed
 )
 
-task__describe_situation = Task(
+task__describe_initial_situation = Task(
     description="Describe the current situation to the player",
     prompt_template="""
-    This is the beginning of {character_name} turn. Progress the story as needed based on what transpire before and describe the situation to {character_name} so they can make their choice.
+    This is the beginning of {character_name} turn. 
+    Progress the story as needed based on what transpire before and describe the situation to {character_name} so they can make their choice.
+    Do not be too verbose, the players want to play! Do provide enough information to help them make an informed decision.
+    Not need to provide a list of choices to the player: let them decide what they want to do.
 
     The story so far: 
     {the_story_so_far}
@@ -272,6 +275,40 @@ task__describe_situation = Task(
     """,
     response_model=None  # Replace with appropriate Pydantic model if needed
 )
+
+task__describe_situation = Task(
+    description="Describe the current situation to the player in a few lines",
+    prompt_template="""
+    This is the beginning of {character_name} turn. Your job is to describe the current situation to the player as succinctly as possible.
+    Progress the story as needed based on what transpire before and describe the situation to {character_name} so they can make their choice.
+    Be succint, the players want to play! Do provide enough information to help them make an informed decision.
+    Not need to provide a list of choices to the player: let them decide what they want to do.
+
+    <the_story_so_far>
+    {the_story_so_far}
+    </the_story_so_far>
+
+    Do not repeat decriptions or facts that appear in the story_so_far since it is fresh in the player's mind.
+    
+    <{character_name}>
+    {character_sheet}
+    </{character_name}>
+    
+    <other_party_members>
+    {other_characters}
+    </other_party_members>
+    
+    If it has not been mentioned already, describe:
+    - How the environment has changed and the consequences of the previous actions, if any, from all the characters.
+    - Where {character_name} is positioned and what they can see, especially compared to other characters in the Party.
+    - Any ongoing effects or conditions
+
+    Do remind {character_name} what they were doing immediately prior to their turn.
+
+    """,
+    response_model=None  # Replace with appropriate Pydantic model if needed
+)
+
 
 class DifficultyAssessment(BaseModel):
     difficulty: str
@@ -331,11 +368,13 @@ task__answer_questions = Task(
 task__resolve_action = Task(
     description="Resolve the character's action based on the roll result",
     prompt_template="""
-    Describe how {character_name}'s action plays out based on the roll
+    Describe how {character_name}'s action plays out based on the roll. Be succint.
 
     The story so far: 
+    <the_story_so_far>
     {the_story_so_far}
     {what_you_just_told_the_player}
+    </the_story_so_far>
 
     {character_name}'s character sheet: {character_sheet}
     {character_name}'s proposed action: {proposed_action}
@@ -350,6 +389,8 @@ task__resolve_action = Task(
     - Environmental factors and circumstances
     - Maintaining forward momentum
     - Creating interesting consequences
+
+    However, do not repeat decriptions or facts that appear in the story_so_far since it is fresh in the player's mind.
     """,
     response_model=None  # Replace with appropriate Pydantic model if needed
 )
