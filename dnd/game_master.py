@@ -8,12 +8,12 @@ import difflib
 
 async def enforce_dm(enforcer_agent, original_text:str) -> str:
 
+    print("DM[*]:")
     edited_text = await enforcer_agent.execute_task(
                 task__enforce_dm,
                 dm_output=original_text
             )
 
-    print("DM[*]:")        
     color_diff(original_text, edited_text)
 
     return edited_text
@@ -21,12 +21,12 @@ async def enforce_dm(enforcer_agent, original_text:str) -> str:
 
 async def enforce_player(enforcer_agent, original_text:str, player_name) -> str:
     
+    print(f"{player_name.upper()}[*]:")        
     edited_text = await enforcer_agent.execute_task(
                 task__enforce_player,
                 player_output=original_text
             )
 
-    print(f"{player_name.upper()}[*]:")        
     color_diff(original_text, edited_text)
 
     return edited_text
@@ -160,9 +160,9 @@ class GameMaster:
             last_actions={} )
     #
 
-    async def execute_player_turn(self, player: PlayerCharacter) -> None:
+    async def execute_player_turn(self, player: PlayerCharacter, the_story_so_far:str) -> None:
         
-        the_narrative = ""
+        this_turn_narrative = the_story_so_far +"\n"
 
         character_name = player.character_name
         character_sheet = player.character_sheet.to_string()
@@ -175,155 +175,175 @@ class GameMaster:
         print(f"\n=== {character_name}'s Turn ===")
 
         try:
-            #print("# 1. DM describes the situation")
+            print("\n# 1. DM describes the situation\n")
             result__situation_description = await self.dm_agent.execute_task(
                 task__describe_situation,
-                situation=situation,
+
+                the_story_so_far=the_story_so_far,
                 character_name=character_name,
-                active_character=character_sheet,
+                character_sheet=character_sheet,
                 other_characters=other_characters,
-                context=context,
-                previous_action=None  # Placeholder, update as needed
             )
 
             result__situation_description = await enforce_dm(self.enforcer_agent, result__situation_description)
 
             new_narrative = f"\nDM:\n{result__situation_description}\n"
             #print(new_narrative)
-            the_narrative += new_narrative
+            this_turn_narrative += new_narrative
 
-
-            #print("# 2. Player asks questions")
+            print("\n# 2. Player asks questions\n")
             result__questions = await player_agent.execute_task(
                 task__ask_questions,
-                situation_description=result__situation_description,
-                context=context
+
+                character_name = character_name,
+                the_story_so_far = the_story_so_far,
+                what_the_dm_just_told_you = result__situation_description,
+                character_sheet=character_sheet,
             )
             
             new_narrative = f"\n{character_name.upper()}:\n{result__questions}\n"
             print(new_narrative)
-            the_narrative += new_narrative
+            this_turn_narrative += new_narrative
 
-            #print("# 3. DM answers questions")
+            print("\n# 3. DM answers questions\n")
             result__answers = await self.dm_agent.execute_task(
                 task__answer_questions,
-                situation=result__situation_description,
-                character_name=character_name,
-                character_details=character_sheet,
-                questions=result__questions,
-                context=context
+
+                character_name = character_name,
+                the_story_so_far = the_story_so_far,
+                what_you_just_told_the_player = result__situation_description,
+                character_sheet = character_sheet,
+                questions = result__questions
             )
 
             result__answers = await enforce_dm(self.enforcer_agent, result__answers)
 
             new_narrative = f"\nDM:\n{result__answers}\n"
             #print(new_narrative)
-            the_narrative += new_narrative
+            this_turn_narrative += new_narrative
 
-            #print("# 4. Player declares intent")
+            print("\n# 4. Player declares intent\n")
             result__intent = await player_agent.execute_task(
                 task__declare_intent,
-                situation_description=result__situation_description,
-                qa_exchange=f"{result__questions}\n{result__answers}",
-                context=self.state.get_relevant_context()
+
+                character_name = character_name,
+                the_story_so_far = the_story_so_far,
+                what_the_dm_just_told_you = result__situation_description,
+                character_sheet = character_sheet,
+                player_questions = result__questions,
+                dm_answers = result__answers,
             )
             new_narrative = f"\n{character_name.upper()}:\n{result__intent}\n"
             print(new_narrative)
-            the_narrative += new_narrative
+            this_turn_narrative += new_narrative
 
-            #print("# 5. Other players provide feedback")
+            print("\n# 5. Other players provide feedback\n")
             result__feedbacks = []
             for other_player in self.player_characters:
                 other_name = other_player.character_name
                 if other_name != character_name:
+
+                    print(f"\n...")
                     result__player_feedback = await other_player.character_agent.execute_task(
                         task__provide_feedback,
-                        situation_description=result__situation_description,
-                        character_name=character_name,
-                        intended_action=result__intent
+
+                        other_character_name=other_name,
+                        the_story_so_far = the_story_so_far,
+                        what_the_dm_just_told_you = result__situation_description,
+                        other_character_sheet = other_player.character_sheet.to_string(),
+                        acting_character_name = character_name,
+                        intended_action = result__intent
                     )
 
                     result__player_feedback = await enforce_player(self.enforcer_agent, result__player_feedback, other_name)
                     result__feedbacks.append((other_name, result__player_feedback))
 
-                    new_narrative = f"\n{other_name.upper()}:\n{result__player_feedback}\n"
+                    new_narrative = f"\n\n{other_name.upper()}:\n{result__player_feedback}\n\n"
                     #print(new_narrative)
-                    the_narrative += new_narrative
+                    this_turn_narrative += new_narrative
 
-            # 6. Player makes final decision
+            print("\n# 6. Player makes final decision\n")
             result__final_action = await player_agent.execute_task(
                 task__make_decision,
-                situation_description=result__situation_description,
-                intended_action=result__intent,
-                party_feedback="\n".join(f"{name}: {fb}" for name, fb in result__feedbacks),
-                context=context
+
+                character_name = character_name,
+                the_story_so_far = the_story_so_far,
+                what_the_dm_just_told_you = result__situation_description,
+                character_sheet = character_sheet,
+                intended_action = result__intent,
+                party_feedback = "\n".join(f"{name}: {fb}" for name, fb in result__feedbacks)
             )
 
             result__final_action = await enforce_player(self.enforcer_agent, result__final_action, character_name)
 
             new_narrative = f"\n{character_name.upper()}:\n{result__final_action}\n"
             #print(new_narrative)
-            the_narrative += new_narrative
+            this_turn_narrative += new_narrative
 
-            # 7. DM assesses difficulty
+            print("\n# 7. DM assesses difficulty\n")
             result__difficulty_assessment:DifficultyAssessment = await self.dm_agent.execute_task(
                 task__assess_difficulty,
-                character_name=character_name,
-                character_details=character_sheet,
-                situation=result__situation_description,
-                action=result__final_action,
-                context=context
+
+                character_name = character_name,
+                the_story_so_far = the_story_so_far,
+                what_you_just_told_the_player = result__situation_description,
+                proposed_action = result__final_action,
+                character_sheet = character_sheet
             )
             new_narrative = f"\nDM:\nDifficulty: {result__difficulty_assessment.difficulty}\nReasoning: {result__difficulty_assessment.reasoning}\n"
             print(new_narrative)
-            the_narrative += new_narrative
+            this_turn_narrative += new_narrative
 
-            # 8. Resolve action
+            print("\n# 8. Resolve action\n")
             difficulty_thresholds = {"auto_succeed": 100, "easy": 80, "average": 60, "hard": 40, "super_hard": 20, "auto_fail":0}.get
             success_threshold = difficulty_thresholds(result__difficulty_assessment.difficulty)
             roll = int(random.uniform(0, 100))
             did_roll_succeed = roll <= success_threshold
 
-            new_narrative = f"\nRoll = {roll}. Threshold was: {success_threshold}\n"
+            new_narrative = f"\nRoll is {roll}. Threshold was {success_threshold}\n"
             print(new_narrative)
-            the_narrative += new_narrative
+            this_turn_narrative += new_narrative
 
             if did_roll_succeed: 
-                new_narrative = f"\n{character_name} succeeded!\n" 
+                new_narrative = f"\n{character_name} succeeds!\n" 
             else: 
-                new_narrative = f"\n{character_name} failed!\n"
+                new_narrative = f"\n{character_name} fails!\n"
             #
             print(new_narrative)
-            the_narrative += new_narrative
+            this_turn_narrative += new_narrative
 
-            result__resolution = await self.dm_agent.execute_task(task__resolve_action,
-                context=context,
-                situation=result__situation_description,
-                character_name=character_name,
-                character_details=character_sheet,
-                action=result__final_action,
-                roll_result=str(roll),
-                success_threshold=str(success_threshold),
-                did_roll_succeed=did_roll_succeed,
-                difficulty=result__difficulty_assessment.difficulty,
-                difficulty_reasoning=result__difficulty_assessment.reasoning
+            result__resolution = await self.dm_agent.execute_task(
+                task__resolve_action,
+
+                character_name = character_name,
+                the_story_so_far = the_story_so_far,
+                what_you_just_told_the_player = result__situation_description,
+                character_sheet = character_sheet,
+                proposed_action = result__final_action,
+                difficulty_assessment = result__difficulty_assessment,
+                roll = roll,
+                success_threshold = success_threshold,
+                did_roll_succeed = did_roll_succeed
             )
 
             result__resolution = await enforce_dm(self.enforcer_agent, result__resolution)
 
             new_narrative = f"\n{result__resolution}\n"
             #print(new_narrative)
-            the_narrative += new_narrative
+            this_turn_narrative += new_narrative
 
             # Update game state
-            self.state.last_actions[character_name] = result__final_action
-            self.state.round_summaries.append(f"{character_name}'s Action:\n- Attempted: {result__final_action}\n- Result: {result__resolution}")
+            #self.state.last_actions[character_name] = result__final_action
+            #self.state.round_summaries.append(f"{character_name}'s Action:\n- Attempted: {result__final_action}\n- Result: {result__resolution}")
 
+            return this_turn_narrative
         
         except Exception as e:
             print(f"Error during {character_name}'s turn: {str(e)}")
+            # halt the game here
+            raise e
 
-        return the_narrative
+        return this_turn_narrative
     #
 
     def _format_other_characters(self, active_player_name: str) -> str:

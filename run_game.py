@@ -80,8 +80,16 @@ async def main(initial_situation):
         initial_situation=initial_situation
     )
 
+    print("Starting the game... v 0.2 \n--------------------\n")
+    print(initial_situation)
+    print()
+
+    the_story_so_far = initial_situation
     for player in player_characters:
-        await game_master.execute_player_turn(player)
+        the_story_so_far = await game_master.execute_player_turn(player, the_story_so_far)
+        print("-------the story so far -------------\n")
+        print(the_story_so_far)
+        print("---------and now...-----------\n")        
     #    
 
 # Run the main function (if using an async framework)

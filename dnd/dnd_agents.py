@@ -31,7 +31,7 @@ summarize_turn = Task(
     
     Action taken: {action_taken}
     Difficulty: {difficulty}
-    Roll: {roll_result} ({success})
+    Roll: {roll} ({success})
     Result: {action_result}
     
     Previous context:
@@ -136,8 +136,11 @@ retrieve_relevant_context = Task(
 task__ask_questions = Task(
     description="Ask relevant questions to the Dungeon Master about the current situation",
     prompt_template="""
-    Current situation:
-    {situation_description}
+    {character_name}, this is your turn. Before you act, ask relevant questions to the Dungeon Master about the current situation
+
+    The story so far: {the_story_so_far}
+    What the DM just told you: {what_the_dm_just_told_you}
+    Your character sheet: {character_sheet}
 
     Based on your character's:
     - Current capabilities and equipment
@@ -160,38 +163,48 @@ task__ask_questions = Task(
 )
 
 task__declare_intent = Task(
-    description="Declare what action you're considering taking",
-    prompt_template="""
-    Current situation:
-    {situation_description}
+    description="Declare your intended action based on the information gathered",
+    prompt_template="""    
+    {character_name}, it is your turn. You have just asked a few questions to the DM and received your answer. Now declare what action you're considering taking and why.
+    
+    The story so far: 
+    {the_story_so_far}
+    {what_the_dm_just_told_you}
+ 
+    Your questions: {player_questions} 
+    The DM's answers: {dm_answers}
 
-    Your questions and the DM's answers:
-    {qa_exchange}
-
+    Your character sheet: {character_sheet}
+    
     Based on:
     - The information you've gathered
     - Your character's capabilities
     - Your personality and motivations
-    - Recent events: {context}
+    - Your relationship with other party members
+    - Your goals and objectives
+    - What happened in the game so far
 
     What single action are you considering taking and why? 
     Make it clear this is your intent, not your final decision. 
-    State it in a matter-of-fact way, concise and precise such as "Mabe I should..." or "I think I will...". Be creative!
+    State it in a matter-of-fact way, concise and precise such as 'Mabe I should...' or '"I think I will...'. 
+    Since you are in a party, it is best if this is an action only you would consider. Be creative!
     """,
     response_model=None  # Replace with appropriate Pydantic model if needed
 )
 
 task__provide_feedback = Task(
-    description="Provide a single sentence as feedback regarding another character's intended action, as if you were talking to them in-character. You can also provide an action that is guarranteed to succeed and near instantaneous, such as adjusting your glasses, or taking out a sword from its scabard.",
+    description="Give feedback to another character's intended action",
     prompt_template="""
-    Current situation:
-    {situation_description}
+    {other_character_name}, it is your turn to provide a quick feedback. Provide a single sentence as feedback regarding another character's intended action, as if you were talking to them in-character. You can also provide an action that is guarranteed to succeed and near instantaneous, such as adjusting your glasses, or taking out a sword from its scabard.
 
-    Character planning to act:
-    {character_name}
+    The story so far: 
+    {the_story_so_far}
+    {what_the_dm_just_told_you}
 
-    Their intended action:
-    {intended_action}
+    Your own character sheet: {other_character_sheet}
+
+    Character planning to act: {acting_character_name}
+    Their intended action: {intended_action}
 
     Consider:
     - Your relationship with this character
@@ -212,24 +225,28 @@ task__provide_feedback = Task(
 task__make_decision = Task(
     description="Make your final decision on what you will attempt, considering party feedback",
     prompt_template="""
-    Current situation:
-    {situation_description}
+    {character_name}, it is your turn. You have proposed an action and received feedback from your party. Now make your final decision on what you will attempt.
 
-    Your original intent:
-    Action: {intended_action}
+    The story so far: 
+    {the_story_so_far}
+    {what_the_dm_just_told_you}
+
+    Your original proposal:
+    {intended_action}
 
     Party feedback:
     {party_feedback}
 
-    Additional context:
-    {context}
+    Your character sheet: 
+    {character_sheet}
 
     Based on your character's:
     - Personality and typical behavior
     - Relationship with other party members
     - Assessment of the feedback
 
-    Make your final decision. It can be brief since we already heard your thinking when you stated your intent.
+    Make your final decision. 
+    It can be brief since we already heard your thinking when you stated your intent.
     """,
     response_model=None  # Replace with appropriate Pydantic model if needed
 )
@@ -237,21 +254,21 @@ task__make_decision = Task(
 task__describe_situation = Task(
     description="Describe the current situation to the player",
     prompt_template="""
-    Current situation: {situation}
-    Active character: {character_name}
-    Active character details: {active_character}
+    This is the beginning of {character_name} turn. Progress the story as needed based on what transpire before and describe the situation to {character_name} so they can make their choice.
+
+    The story so far: 
+    {the_story_so_far}
+    
+    {character_name}'s details: {character_sheet}
     Other party members: {other_characters}
-    Recent events:
-    {context}
-
-    Previous action from the Party (if any):
-    {previous_action}
-
+    
     Describe the scene to {character_name}, emphasizing:
-    - What {character_name} character can perceive
+    - How the environment has changed and the consequences of the previous actions, if any, from all the characters.
+    - Where {character_name} is positioned and what they can see, especially compared to other characters in the Party.
+    - What {character_name} was doing immediately prior to their turn.
     - Any obvious threats or opportunities
     - The atmosphere and environment
-    - Recent changes or consequences of previous actions, from this character, other characters in the Party or the world
+    - Any ongoing effects or conditions
     """,
     response_model=None  # Replace with appropriate Pydantic model if needed
 )
@@ -262,21 +279,19 @@ class DifficultyAssessment(BaseModel):
 #
 
 task__assess_difficulty = Task(
-    description="Assess the difficulty of a proposed action for a character",
+    description="Assess the difficulty of a character's proposed action",
     prompt_template="""
-    Character attempting the action:
-    {character_name}'s details: {character_details}
+    Assess the difficulty of {character_name}'s proposed action.
 
-    Current situation:
-    {situation}
+    The story so far:
+    {the_story_so_far}
+    {what_you_just_told_the_player}
 
-    Proposed {character_name}'s action:
-    {action}
+    {character_name}'s proposed action: {proposed_action}
+    {character_name}'s character sheet: {character_sheet}
 
-    Recent context:
-    {context}
-
-    Assess how difficult this action would be to accomplish for {character_name}. Consider:
+    Assess how difficult this action would be to accomplish for {character_name}. 
+    Consider:
     - {character_name}'s capabilities and equipment
     - The situation and environment
     - Any relevant previous actions or consequences
@@ -291,20 +306,16 @@ task__assess_difficulty = Task(
 )
 
 task__answer_questions = Task(
-    description="Answer character's questions about the situation",
+    description="Answer the character's questions based on the game's progress",
     prompt_template="""
-    Current situation:
-    {situation}
+    Answer {character_name}'s questions in context of the game played so far
 
-    Active character: {character_name}
-    Active character details:
-    {character_details}
+    The story so far: 
+    {the_story_so_far}
+    {what_you_just_told_the_player}
 
-    Questions:
-    {questions}
-
-    Recent context:
-    {context}
+    {character_name}'s character sheet: {character_sheet}
+    {character_name}'s questions: {questions}
 
     Answer these questions while considering:
     - Where {character_name} is positioned and what they can see, especially compared to other characters in the Party
@@ -318,26 +329,20 @@ task__answer_questions = Task(
 )
 
 task__resolve_action = Task(
-    description="Describe how a character's action plays out based on the roll",
+    description="Resolve the character's action based on the roll result",
     prompt_template="""
-    Current situation:
-    {situation}
+    Describe how {character_name}'s action plays out based on the roll
 
-    Active character: {character_name}
-    Active character details:
-    {character_details}
+    The story so far: 
+    {the_story_so_far}
+    {what_you_just_told_the_player}
 
-    Attempted action:
-    {action}
+    {character_name}'s character sheet: {character_sheet}
+    {character_name}'s proposed action: {proposed_action}
 
-    Difficulty assessment:
-    {difficulty_reasoning}
-
-    Roll result: {roll_result}. Must be smaller than {success_threshold} to succeed.
+    Your difficulty assessment for this action: {difficulty_assessment}
+    Roll result: {roll}. Note: must be smaller than {success_threshold} to succeed.
     Success: {did_roll_succeed}
-
-    Recent context:
-    {context}
 
     Describe how the action plays out for {character_name}, considering:
     - The degree of success or failure (based on roll)
@@ -390,9 +395,7 @@ player_agent = Agent(
     model="openai|gpt-4o-mini",
     temperature=0.7,
     system_prompt="""
-    You are playing the role of:
-
-    Character with personality and traits as defined by the game.
+    You are playing the role of a D&D character with personality and traits as defined by the game.
 
     Core principles when roleplaying this character:
     - Stay true to your personality traits, ideals, bonds, and flaws
@@ -483,11 +486,13 @@ enforcer_agent = Agent(
 task__enforce_dm = Task(
     description="Ensure the DM does not control player actions or internal dialogue",
     prompt_template="""
+        Ensure the DM does not control player actions or internal dialogue
+
         DM Output:
         {dm_output}
 
         Review this output to ensure:
-        - The DM does not dictate what players think or feel. 
+        - The DM does not dictate what players think. 
         - The DM does not dictate what a player do unless the player explictly attempted the action.
         
         The DM however is free to describe the environment, the NPCs and the consequences of the player's actions.
@@ -502,6 +507,8 @@ task__enforce_dm = Task(
 task__enforce_player = Task(
     description="Ensure players do not control NPCs or determine outcomes of significant actions",
     prompt_template="""
+        Ensure players do not control NPCs or determine outcomes of significant actions
+
         Player Output:
         {player_output}
 
