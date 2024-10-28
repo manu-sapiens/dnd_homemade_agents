@@ -1,3 +1,5 @@
+# tts_elevenlabs.py
+# ----------------------------------------------
 import os
 import asyncio
 import uuid
@@ -8,7 +10,7 @@ from elevenlabs.client import ElevenLabs
 from pydub import AudioSegment
 from pydub.playback import play
 from concurrent.futures import ThreadPoolExecutor
-
+# ----------------------------------------------
 # ElevenLabs setup
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
@@ -16,9 +18,12 @@ client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
 # Asynchronous queue to hold audio streams
 audio_queue = asyncio.Queue()
 
-# Generate a unique run ID and initialize counter
+# Generate a unique run ID, initialize counter, and create directory for this run
 run_id = uuid.uuid4().hex
 file_count = 0
+output_dir = f"./audio_out/{run_id}"
+os.makedirs(output_dir, exist_ok=True)
+print(f"Output directory for this session: {output_dir}")
 
 async def text_to_speech_stream(text: str, voice_id: str = "pNInz6obpgDQGcFmaJgB") -> IO[bytes]:
     response = client.text_to_speech.convert(
@@ -49,16 +54,18 @@ async def play_audio_from_stream(audio_stream: IO[bytes]):
 
 async def save_audio_to_disk(audio_stream: IO[bytes], filename: str):
     # Save audio data from BytesIO to a file after playback
-    with open(filename, "wb") as f:
+    file_path = os.path.join(output_dir, filename)
+    with open(file_path, "wb") as f:
         f.write(audio_stream.read())
-    print(f"Audio saved to {filename}")
+    print(f"Audio saved to {file_path}")
 
 async def enqueue_audio(text: str, voice_id: str = "pNInz6obpgDQGcFmaJgB"):
     global file_count
     
-    # Increment count and generate filename
+    # Increment count and generate filename based on voice_id and count
     file_count += 1
-    filename = f"{run_id}_{file_count}.mp3"
+    sanitized_voice_id = voice_id.replace("/", "_")  # Sanitize if necessary
+    filename = f"{sanitized_voice_id}_{file_count}.mp3"
     
     # Convert text to speech and add to the queue
     audio_stream = await text_to_speech_stream(text, voice_id=voice_id)
@@ -82,4 +89,3 @@ async def playback_worker():
 async def tts_initialize():
     # Start the playback worker
     asyncio.create_task(playback_worker())
-#

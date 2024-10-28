@@ -1,19 +1,25 @@
-
+# game_master.py
+# ----------------------------------------------
 from typing import List, Dict, Any
 from dataclasses import dataclass
 from pydantic import BaseModel
 from random import Random
-random = Random()
 import difflib
-
-from dnd.tts import enqueue_audio, tts_initialize
 import uuid
+# ----------------------------------------------
+from audio.tts_elevenslab import enqueue_audio, tts_initialize
+
+random = Random()
 
 VERBOSE = False
 SKIP = True
+TTS_MODEL = "ELEVENSLAB"
 
 async def tts(text:str, voice_id:str="pNInz6obpgDQGcFmaJgB") -> None:
-    await enqueue_audio(text, voice_id)
+
+    # ELEVENSLAB TTS
+    if TTS_MODEL == "ELEVENSLAB":
+        await enqueue_audio(text, voice_id)
 #
 
 async def enforce_dm(enforcer_agent, original_text:str) -> str:
@@ -183,6 +189,9 @@ class GameMaster:
                     character_sheet=character_sheet,
                     other_characters=other_characters,
                 )
+                generated__situation_description = await enforce_dm(self.enforcer_agent, generated__situation_description)
+                if SKIP==False: await tts(generated__situation_description, self.dm_voice)
+
             else:
                 print("\n# 1. DM describes the situation\n")
                 generated__situation_description = await self.dm_agent.execute_task(
@@ -193,10 +202,11 @@ class GameMaster:
                     character_sheet=character_sheet,
                     other_characters=other_characters,
                 )
+                generated__situation_description = await enforce_dm(self.enforcer_agent, generated__situation_description)
+                await tts(generated__situation_description, self.dm_voice)
+
             #
 
-            generated__situation_description = await enforce_dm(self.enforcer_agent, generated__situation_description)
-            if SKIP: await tts(generated__situation_description, self.dm_voice)
 
             new_narrative = f"\nDM:\n{generated__situation_description}\n"
             #print(new_narrative)
