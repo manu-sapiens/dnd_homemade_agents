@@ -147,16 +147,34 @@ async def await_all_tasks_complete():
         logger.info("No background tasks to wait for.")
 
 async def playback_worker():
+    print("Playback worker started.")
     while True:
-        file_path = await audio_queue.get()
-        if file_path is None:
-            audio_queue.task_done()
-            break
+        print("Inside the playback worker loop.")
         try:
-            await play_audio_file(file_path)
+            file_path = await audio_queue.get()
+            print(f"Playback worker processing file: {file_path}")
+            
+            # Check if this is the termination signal
+            if file_path is None:
+                print("Playback worker received termination signal.")
+                audio_queue.task_done()
+                break
+            
+            # Process the audio file
+            try:
+                await play_audio_file(file_path)
+            except Exception as e:
+                print(f"Error processing audio file at {file_path}: {e}")
+            
+            # Mark the task as done
+            audio_queue.task_done()
+        
         except Exception as e:
-            print(f"Error processing audio: {e}")
-        audio_queue.task_done()
+            print(f"Unexpected error in playback_worker: {e}")
+
+        # wait 1s
+        print("Playback worker sleeping...")
+        await asyncio.sleep(1)
 
 async def flush_audio_queue():
     await await_all_tasks_complete()
@@ -185,7 +203,7 @@ async def tts_initialize():
     test_nltk_punkt()
 
     # Start the playback worker
-    asyncio.create_task(playback_worker())
+    # asyncio.create_task(playback_worker())
 #
 
 # Example usage

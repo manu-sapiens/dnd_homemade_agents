@@ -6,9 +6,23 @@ from pydantic import BaseModel
 from random import Random
 import difflib
 import uuid
-
 # ----------------------------------------------
+from dnd.dnd_agents import (
+    Agent, Task, compress_memory, summarize_turn, summarize_round,
+    assess_detail_importance, retrieve_relevant_context, task__ask_questions,
+    task__declare_intent, task__provide_feedback, task__make_decision, task__describe_situation, task__describe_initial_situation,
+    task__assess_difficulty, task__answer_questions, task__resolve_action, task__enforce_dm, task__enforce_player,
+    chronicler_agent, dm_agent, enforcer_agent, DifficultyAssessment
+)
 from audio.tts_elevenlabs import elevenlabs_tts, tts_initialize, flush_audio_queue
+from core.job_manager import (
+    initialize_workers,
+    enqueue_llm_job,
+    enqueue_audio_playback_job,
+    enqueue_tts_job,
+    enqueue_user_input_job,
+    app
+)# ----------------------------------------------
 
 random = Random()
 
@@ -26,7 +40,8 @@ async def tts(text: str, voice_id: str = "pNInz6obpgDQGcFmaJgB") -> None:
 async def enforce_dm(enforcer_agent, original_text:str) -> str:
 
     print("DM[*]:")
-    edited_text = await enforcer_agent.execute_task(
+    edited_text = await enqueue_llm_job(
+                enforcer_agent,
                 task__enforce_dm,
                 dm_output=original_text
             )
@@ -39,7 +54,8 @@ async def enforce_dm(enforcer_agent, original_text:str) -> str:
 async def enforce_player(enforcer_agent, original_text:str, player_name) -> str:
     
     print(f"{player_name.upper()}[*]:")        
-    edited_text = await enforcer_agent.execute_task(
+    edited_text = await enqueue_llm_job(
+                enforcer_agent,
                 task__enforce_player,
                 player_output=original_text
             )
@@ -75,14 +91,6 @@ def color_diff(original, edited):
     # Join list into a single string with spaces and print to console
     print(" ".join(result))
 #
-
-from dnd.dnd_agents import (
-    Agent, Task, compress_memory, summarize_turn, summarize_round,
-    assess_detail_importance, retrieve_relevant_context, task__ask_questions,
-    task__declare_intent, task__provide_feedback, task__make_decision, task__describe_situation, task__describe_initial_situation,
-    task__assess_difficulty, task__answer_questions, task__resolve_action, task__enforce_dm, task__enforce_player,
-    chronicler_agent, dm_agent, enforcer_agent, DifficultyAssessment
-)
 
 DEFAULT_PLAYERS_MODEL = "openai|gpt-4o-mini"
 DEFAULT_PLAYERS_TEMPERATURE = 0.7
@@ -124,13 +132,13 @@ class PlayerCharacter:
     character_agent: Agent
     character_voice: str
 
-    def __init__(self, name: str, character_sheet: CharacterSheet, character_voice: str = "pNInz6obpgDQGcFmaJgB"):
+    def __init__(self, name: str, character_sheet: CharacterSheet, character_voice: str = "pNInz6obpgDQGcFmaJgB", character_model: str = DEFAULT_PLAYERS_MODEL):
    
         PLAYER_SYSTEM_PROMPT = f"You are playing {name}, a character in a D&D game. This is a brief description of your character: {character_sheet.to_string()}."""
 
         self.character_name = name
         self.character_sheet = character_sheet
-        self.character_agent = Agent(name=name, model=DEFAULT_PLAYERS_MODEL, temperature=DEFAULT_PLAYERS_TEMPERATURE, system_prompt=PLAYER_SYSTEM_PROMPT)
+        self.character_agent = Agent(name=name, model=character_model, temperature=DEFAULT_PLAYERS_TEMPERATURE, system_prompt=PLAYER_SYSTEM_PROMPT)
         self.character_voice = character_voice
     #
 #
@@ -147,10 +155,10 @@ class GameMaster:
         initial_situation: str):
 
         self.dm_voice = dm_voice
-        self.dm_agent = dm_agent
+        self.agent__dm = dm_agent
         self.player_characters = player_characters
-        self.chronicler_agent = chronicler_agent
-        self.enforcer_agent = enforcer_agent
+        self.agent__chronicler = chronicler_agent
+        self.agent__enforcer = enforcer_agent
         self.state = GameState(
             current_situation=initial_situation,
             current_round=1,
@@ -169,7 +177,7 @@ class GameMaster:
 
         character_name = player.character_name
         character_sheet = player.character_sheet.to_string()
-        player_agent = player.character_agent
+        agent__player = player.character_agent
         character_voice = player.character_voice
         
         context = self.state.get_relevant_context()
@@ -182,7 +190,8 @@ class GameMaster:
             generated__situation_description = ""
             if self.very_first_time:
                 print("\n# 1. DM describes the situation FOR THE FIRST TIME\n")
-                generated__situation_description = await self.dm_agent.execute_task(
+                generated__situation_description = await enqueue_llm_job(
+                    self.agent__dm,
                     task__describe_situation,
 
                     the_story_so_far=the_story_so_far,
@@ -190,7 +199,7 @@ class GameMaster:
                     character_sheet=character_sheet,
                     other_characters=other_characters,
                 )
-                generated__situation_description = await enforce_dm(self.enforcer_agent, generated__situation_description)
+                generated__situation_description = await enforce_dm(self.agent__enforcer, generated__situation_description)
                 await tts(generated__situation_description, self.dm_voice)
             #
 
@@ -203,14 +212,15 @@ class GameMaster:
             print("\n# 2. Player asks questions\n")
             if VERBOSE: await tts(f"{character_name}, do you have any questions?", self.dm_voice)
 
-            generated__questions = await player_agent.execute_task(
-                task__ask_questions,
+            generated__questions = await enqueue_llm_job(
+                    agent__player,
+                    task__ask_questions,
 
-                character_name = character_name,
-                the_story_so_far = the_story_so_far,
-                what_the_dm_just_told_you = generated__situation_description,
-                character_sheet=character_sheet,
-            )
+                    character_name=character_name,
+                    the_story_so_far=the_story_so_far,
+                    what_the_dm_just_told_you=generated__situation_description,
+                    character_sheet=character_sheet,
+                )
             
             new_narrative = f"\n{character_name.upper()}:\n{generated__questions}\n"
             if VERBOSE: await tts(generated__questions, character_voice)
@@ -219,17 +229,18 @@ class GameMaster:
             this_turn_narrative += new_narrative
 
             print("\n# 3. DM answers questions\n")
-            generated__answers = await self.dm_agent.execute_task(
+            generated__answers = await enqueue_llm_job(
+                self.agent__dm,
                 task__answer_questions,
 
-                character_name = character_name,
-                the_story_so_far = the_story_so_far,
-                what_you_just_told_the_player = generated__situation_description,
-                character_sheet = character_sheet,
-                questions = generated__questions
+                character_name=character_name,
+                the_story_so_far=the_story_so_far,
+                what_you_just_told_the_player=generated__situation_description,
+                character_sheet=character_sheet,
+                questions=generated__questions,
             )
 
-            generated__answers = await enforce_dm(self.enforcer_agent, generated__answers)
+            generated__answers = await enforce_dm(self.agent__enforcer, generated__answers)
             if VERBOSE: await tts(generated__answers, self.dm_voice)
 
             new_narrative = f"\nDM:\n{generated__answers}\n"
@@ -237,7 +248,8 @@ class GameMaster:
             this_turn_narrative += new_narrative
 
             print("\n# 4. Player declares intent\n")
-            generated__intent = await player_agent.execute_task(
+            generated__intent = await enqueue_llm_job(
+                agent__player,
                 task__declare_intent,
 
                 character_name = character_name,
@@ -265,7 +277,8 @@ class GameMaster:
 
                     print(f"\n...")
                     await tts(f"{other_name}?", character_voice)
-                    generated__player_feedback = await other_agent.execute_task(
+                    generated__player_feedback = await enqueue_llm_job(
+                        other_agent,
                         task__provide_feedback,
 
                         other_character_name=other_name,
@@ -276,7 +289,7 @@ class GameMaster:
                         intended_action = generated__intent
                     )
 
-                    generated__player_feedback = await enforce_player(self.enforcer_agent, generated__player_feedback, other_name)
+                    generated__player_feedback = await enforce_player(self.agent__enforcer, generated__player_feedback, other_name)
                     await tts(generated__player_feedback, other_voice)
 
                     generated__feedbacks.append((other_name, generated__player_feedback))
@@ -286,7 +299,8 @@ class GameMaster:
                     this_turn_narrative += new_narrative
 
             print("\n# 6. Player makes final decision\n")
-            generated__final_action = await player_agent.execute_task(
+            generated__final_action = await enqueue_llm_job(
+                agent__player,
                 task__make_decision,
 
                 character_name = character_name,
@@ -297,7 +311,7 @@ class GameMaster:
                 party_feedback = "\n".join(f"{name}: {fb}" for name, fb in generated__feedbacks)
             )
 
-            generated__final_action = await enforce_player(self.enforcer_agent, generated__final_action, character_name)
+            generated__final_action = await enforce_player(self.agent__enforcer, generated__final_action, character_name)
             await tts(generated__final_action, character_voice)
 
             new_narrative = f"\n{character_name.upper()}:\n{generated__final_action}\n"
@@ -305,7 +319,8 @@ class GameMaster:
             this_turn_narrative += new_narrative
 
             print("\n# 7. DM assesses difficulty\n")
-            generated__difficulty_assessment:DifficultyAssessment = await self.dm_agent.execute_task(
+            generated__difficulty_assessment:DifficultyAssessment = await enqueue_llm_job(
+                self.agent__dm,
                 task__assess_difficulty,
 
                 character_name = character_name,
@@ -339,7 +354,8 @@ class GameMaster:
 
             this_turn_narrative += new_narrative
 
-            generated__resolution = await self.dm_agent.execute_task(
+            generated__resolution = await enqueue_llm_job(
+                self.agent__dm,
                 task__resolve_action,
 
                 character_name = character_name,
@@ -353,7 +369,7 @@ class GameMaster:
                 did_roll_succeed = did_roll_succeed
             )
 
-            generated__resolution = await enforce_dm(self.enforcer_agent, generated__resolution)
+            generated__resolution = await enforce_dm(self.agent__enforcer, generated__resolution)
             await tts(generated__resolution, self.dm_voice)
 
             new_narrative = f"\n{generated__resolution}\n"

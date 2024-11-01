@@ -6,11 +6,25 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 from openai import AsyncOpenAI
 import openai
-
 import json
 from time import sleep
 from enum import Enum, auto
 from dotenv import load_dotenv
+import aioconsole
+import asyncio
+from PyQt5.QtWidgets import QApplication, QInputDialog
+#from PyQt5.QtCore import QEventLoop
+import sys
+from qasync import QEventLoop
+from core.job_manager import (
+    initialize_workers,
+    enqueue_llm_job,
+    enqueue_audio_playback_job,
+    enqueue_tts_job,
+    enqueue_user_input_job,
+    app
+)
+
 
 @dataclass
 class Settings:
@@ -203,7 +217,6 @@ class Agent:
         temperature: float = 0.7,
         model_caller: Optional[ModelCaller] = None
     ):
-
         self.name = name
         self.system_prompt = system_prompt
         self.model = model
@@ -221,6 +234,12 @@ class Agent:
         # Format the prompt
         formatted_prompt = task.format_prompt(**kwargs)
 
+        # Check if the model is "human"
+        if self.model.lower() == "human":
+            # Non-blocking user input
+            user_input = await enqueue_user_input_job(f"{task.description}", user_name=self.name, app=app)
+            return user_input
+
         # Call the model
         return await self.model_caller.call_model(
             model_string=self.model,
@@ -232,7 +251,6 @@ class Agent:
 
     def __repr__(self):
         return f"{self.__class__.__name__}(name='{self.name}', model='{self.model}')"
-
 
 settings = Settings()
 aclient = AsyncOpenAI(api_key=settings.openai_api_key)
