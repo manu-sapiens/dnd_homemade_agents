@@ -5,9 +5,10 @@ import argparse
 # ----------------------------------------------
 from dnd.dnd_agents import Agent, player_agent, chronicler_agent, dm_agent, enforcer_agent
 from dnd.game_master import GameMaster, PlayerCharacter, CharacterSheet
+from audio.tts_elevenlabs import elevenlabs_tts, tts_initialize, flush_audio_queue
 
 DM_VOICE = "N2lVS1w4EtoT3dr4eOWO" # Callum's voice
-VERBOSE = False
+SKIP_INTRO = False
 
 # Example of running the game
 async def main(initial_situation):
@@ -89,10 +90,9 @@ async def main(initial_situation):
     )
 
     
-    from dnd.tts import enqueue_audio, tts_initialize
     await tts_initialize()
-    if VERBOSE: await enqueue_audio("Welcome to the game! I am the Dungeon Master. Let's begin.", DM_VOICE)
-    if VERBOSE: await enqueue_audio(initial_situation, DM_VOICE)
+    if SKIP_INTRO==False: await elevenlabs_tts("Welcome to the game! I am the Dungeon Master. Let's begin.", DM_VOICE)
+    if SKIP_INTRO==False: await elevenlabs_tts(initial_situation, DM_VOICE)
 
     print("Starting the game... v 0.2 \n--------------------\n")
     print(initial_situation)
@@ -104,7 +104,8 @@ async def main(initial_situation):
         print("-------the story so far -------------\n")
         print(the_story_so_far)
         print("---------and now...-----------\n")        
-    #    
+    # 
+    await flush_audio_queue()   
 
 # Run the main function (if using an async framework)
 if __name__ == "__main__":

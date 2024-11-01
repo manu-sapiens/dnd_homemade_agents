@@ -6,21 +6,22 @@ from pydantic import BaseModel
 from random import Random
 import difflib
 import uuid
+
 # ----------------------------------------------
-from audio.tts_elevenslab import enqueue_audio, tts_initialize
+from audio.tts_elevenlabs import elevenlabs_tts, tts_initialize, flush_audio_queue
 
 random = Random()
 
 VERBOSE = False
-SKIP = True
+SKIP = False
 TTS_MODEL = "ELEVENSLAB"
 
-async def tts(text:str, voice_id:str="pNInz6obpgDQGcFmaJgB") -> None:
-
+async def tts(text: str, voice_id: str = "pNInz6obpgDQGcFmaJgB") -> None:
     # ELEVENSLAB TTS
     if TTS_MODEL == "ELEVENSLAB":
-        await enqueue_audio(text, voice_id)
-#
+        # Schedule enqueue_audio to run as a background task
+        await elevenlabs_tts(text, voice_id)
+
 
 async def enforce_dm(enforcer_agent, original_text:str) -> str:
 
@@ -182,19 +183,6 @@ class GameMaster:
             if self.very_first_time:
                 print("\n# 1. DM describes the situation FOR THE FIRST TIME\n")
                 generated__situation_description = await self.dm_agent.execute_task(
-                    task__describe_initial_situation,
-
-                    the_story_so_far=the_story_so_far,
-                    character_name=character_name,
-                    character_sheet=character_sheet,
-                    other_characters=other_characters,
-                )
-                generated__situation_description = await enforce_dm(self.enforcer_agent, generated__situation_description)
-                if SKIP==False: await tts(generated__situation_description, self.dm_voice)
-
-            else:
-                print("\n# 1. DM describes the situation\n")
-                generated__situation_description = await self.dm_agent.execute_task(
                     task__describe_situation,
 
                     the_story_so_far=the_story_so_far,
@@ -204,7 +192,6 @@ class GameMaster:
                 )
                 generated__situation_description = await enforce_dm(self.enforcer_agent, generated__situation_description)
                 await tts(generated__situation_description, self.dm_voice)
-
             #
 
 

@@ -39,3 +39,8 @@ htmlcov/
 
 # Logs
 *.log
+
+# Audio
+*.wav
+*.mp3
+audio_cache.json

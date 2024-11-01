@@ -24,111 +24,129 @@ compress_memory = Task(
 summarize_turn = Task(
     description="Create a summary of a player's turn and its effects",
     prompt_template="""
-    Round {round_number}, Character: {character_name}
-    
-    Initial situation:
-    {initial_situation}
-    
-    Action taken: {action_taken}
-    Difficulty: {difficulty}
-    Roll: {roll} ({success})
-    Result: {action_result}
-    
-    Previous context:
-    {previous_context}
-    
-    Summarize:
-    - How the situation has changed
-    - Immediate effects of the action
-    - Current state of the environment
-    - What the next player needs to know
+    <turn_summary>
+        <round_number>{round_number}</round_number>
+        <character_name>{character_name}</character_name>
+
+        <initial_situation>
+            {initial_situation}
+        </initial_situation>
+
+        <action_taken>
+            {action_taken}
+        </action_taken>
+
+        <difficulty>{difficulty}</difficulty>
+        <roll>{roll}</roll>
+        <success>{success}</success>
+        <result>
+            {action_result}
+        </result>
+
+        <previous_context>
+            {previous_context}
+        </previous_context>
+
+        <summary_guidelines>
+            Use the initial_situation to identify the context before the action.
+            Use the action_taken and roll result to describe what changed, considering both immediate and potential impacts.
+            Reference the previous_context for any ongoing effects or previously unresolved issues.
+
+            Summarize:
+            - How the situation has changed based on action_taken
+            - Immediate effects of the action on the environment and characters
+            - Any information that will impact the next player's turn
+        </summary_guidelines>
+    </turn_summary>
     """,
     response_model=None  # Replace with appropriate Pydantic model if needed
 )
+
 
 summarize_round = Task(
     description="Create a comprehensive summary of the completed round",
     prompt_template="""
-    Round number: {round_number}
+    <round_summary>
+        <round_number>{round_number}</round_number>
 
-    Initial situation:
-    {initial_situation}
+        <initial_situation>
+            {initial_situation}
+        </initial_situation>
 
-    Events this round:
-    {round_events}
+        <round_events>
+            {round_events}
+        </round_events>
 
-    Party members:
-    {party_members}
+        <party_members>
+            {party_members}
+        </party_members>
 
-    Previous round summary (if any):
-    {previous_summary}
+        <previous_summary>
+            {previous_summary}
+        </previous_summary>
 
-    Create a structured summary highlighting:
-    - Key events and their significance
-    - Changes to characters or their status
-    - Environmental or situational changes
-    - Immediate and potential consequences
-    - The main narrative thread
+        <summary_guidelines>
+            - Use initial_situation to frame the context at the start of the round.
+            - Use round_events to highlight important actions and their impacts.
+            - Reference party_members to note any character status updates or relationship shifts.
+            - Connect with previous_summary to maintain continuity and track unresolved threads.
 
-    Required fields:
-    - key_events
-    - party_state
-    - environment_changes
-    - important_consequences
-    - narrative_focus
-
-    Consider different types of information:
-    - Narrative developments
-    - Tactical situation
-    - Character developments
-    - Ongoing effects
+            Summarize:
+            - Key events and their significance
+            - Changes in characters or the environment
+            - Immediate and potential consequences
+            - Primary narrative focus for the next round
+        </summary_guidelines>
+    </round_summary>
     """,
     response_model=None  # Replace with appropriate Pydantic model if needed
 )
+
 
 assess_detail_importance = Task(
     description="Evaluate the importance of specific details for future reference",
     prompt_template="""
-    Detail to assess:
-    {detail}
+    <detail_assessment>
+        <detail>{detail}</detail>
+        <current_context>{current_context}</current_context>
+        <recent_history>{recent_history}</recent_history>
 
-    Current context:
-    {current_context}
+        <assessment_guidelines>
+            - Evaluate detail in light of current_context for immediate relevance.
+            - Refer to recent_history to identify connections with ongoing plot threads or past events.
+            - Assess whether this detail impacts character development, tactical choices, or story progression.
 
-    Recent history:
-    {recent_history}
-
-    Evaluate this detail's importance considering:
-    - Potential future relevance
-    - Connection to existing plot threads
-    - Impact on character development
-    - Tactical significance
-    - Narrative implications
+            Consider:
+            - Potential future relevance of detail
+            - Connections to plot or character arcs in recent_history
+            - Tactical or narrative importance within current_context
+        </assessment_guidelines>
+    </detail_assessment>
     """,
     response_model=None  # Replace with appropriate Pydantic model if needed
 )
 
+
 retrieve_relevant_context = Task(
     description="Retrieve relevant context for the current situation",
     prompt_template="""
-    Current situation:
-    {current_situation}
+    <retrieve_context>
+        <current_situation>{current_situation}</current_situation>
+        <active_character>{active_character}</active_character>
+        <attempted_action>{attempted_action}</attempted_action>
+        <memory_store>{memory_store}</memory_store>
 
-    Character acting:
-    {active_character}
+        <context_guidelines>
+            - Use current_situation to frame the setting and identify immediate information needs.
+            - Look at active_character and attempted_action to focus on relevant experiences and tactical knowledge.
+            - Search memory_store for similar past events, character actions, or consequences connected to the current situation.
 
-    Attempted action:
-    {attempted_action}
-
-    Available memory:
-    {memory_store}
-
-    Identify and retrieve:
-    - Similar past situations
-    - Relevant character experiences
-    - Related consequences
-    - Applicable tactical information
-    - Connected narrative elements
+            Retrieve:
+            - Related character experiences and tactical information from memory_store
+            - Connected narrative elements that may influence current_situation
+            - Similar past situations relevant to active_character
+        </context_guidelines>
+    </retrieve_context>
     """,
     response_model=None  # Replace with appropriate Pydantic model if needed
 )
@@ -136,58 +154,82 @@ retrieve_relevant_context = Task(
 task__ask_questions = Task(
     description="Ask relevant questions to the Dungeon Master about the current situation",
     prompt_template="""
-    {character_name}, this is your turn. Before you act, ask relevant questions to the Dungeon Master about the current situation
+    <ask_questions>
+        <character_name>{character_name}</character_name>
 
-    The story so far: {the_story_so_far}
-    What the DM just told you: {what_the_dm_just_told_you}
-    Your character sheet: {character_sheet}
+        <turn_instructions>
+            It is your turn. Before you act, ask relevant questions to the Dungeon Master about the current situation.
+        </turn_instructions>
 
-    Based on your character's:
-    - Current capabilities and equipment
-    - Personality and motivations
-    - Recent experiences
-    - Knowledge and expertise
+        <story_so_far>
+            {the_story_so_far}
+        </story_so_far>
 
-    What questions would you ask to better understand:
-    - Potential risks and opportunities
-    - Important details you need to make decisions
-    - Aspects relevant to your character's interests
+        <dm_info>
+            {what_the_dm_just_told_you}
+        </dm_info>
 
-    Regarding the world, only ask questions that would take only an instant to answer, like a quick glance or simple observation.
+        <character_sheet>
+            {character_sheet}
+        </character_sheet>
 
-    Format your questions as a list separated by |
-    Only ask questions to clarify the situation, a game rule or something you should know about your character, others, the situation or the world.
-    Prioritize: Try to limit yourself to at most 3 questions: one question about rules, one question about your character and one question about the world.
+        <question_guidelines>
+            - Use dm_info to clarify recent changes or details about the immediate environment.
+            - Refer to story_so_far to connect your questions with any ongoing plot threads or previous events relevant to your character.
+            - Use character_sheet to shape questions based on your character’s motivations, skills, and knowledge.
+
+            Formulate concise questions:
+            - About potential risks and opportunities related to dm_info
+            - That clarify points your character would naturally wonder about, considering their abilities in character_sheet
+            - Limit yourself to 3 questions: one about rules, one about your character, and one about the world.
+        </question_guidelines>
+    </ask_questions>
     """,
     response_model=None  # Replace with appropriate Pydantic model if needed
 )
 
+
 task__declare_intent = Task(
     description="Declare your intended action based on the information gathered",
-    prompt_template="""    
-    {character_name}, it is your turn. You have just asked a few questions to the DM and received your answer. Now declare what action you're considering taking and why.
-    
-    The story so far: 
-    {the_story_so_far}
-    {what_the_dm_just_told_you}
- 
-    Your questions: {player_questions} 
-    The DM's answers: {dm_answers}
+    prompt_template="""
+    <declare_intent>
+        <character_name>{character_name}</character_name>
 
-    Your character sheet: {character_sheet}
-    
-    Based on:
-    - The information you've gathered
-    - Your character's capabilities
-    - Your personality and motivations
-    - Your relationship with other party members
-    - Your goals and objectives
-    - What happened in the game so far
+        <turn_instructions>
+            It is your turn. You have just asked a few questions to the DM and received your answers. Now declare what action you're considering taking and why.
+        </turn_instructions>
 
-    What single action are you considering taking and why? 
-    Make it clear this is your intent, not your final decision. 
-    State it in a matter-of-fact way, concise and precise such as 'Mabe I should...' or '"I think I will...'. 
-    Since you are in a party, it is best if this is an action only you would consider. Be creative!
+        <story_so_far>
+            {the_story_so_far}
+        </story_so_far>
+
+        <dm_response>
+            {what_the_dm_just_told_you}
+        </dm_response>
+
+        <player_questions>
+            {player_questions}
+        </player_questions>
+
+        <dm_answers>
+            {dm_answers}
+        </dm_answers>
+
+        <character_sheet>
+            {character_sheet}
+        </character_sheet>
+
+        <intent_guidelines>
+            Based on:
+            - The information you've gathered from the dm_answers
+            - Your character's capabilities, goals, objectives, personality and motivations as describe in the character_sheet
+            - What happened in the game so far and your relationship with other party members as gathered from the_story_so_far
+
+            Describe the action you are considering. Make it clear this is your intent, not your final decision. 
+            State it concisely, such as "Maybe I should..." or "I think I will...".
+            This action should ideally reflect your unique role in the party.
+        </intent_guidelines>
+    </declare_intent>
     """,
     response_model=None  # Replace with appropriate Pydantic model if needed
 )
@@ -195,32 +237,42 @@ task__declare_intent = Task(
 task__provide_feedback = Task(
     description="Give feedback to another character's intended action",
     prompt_template="""
-    {other_character_name}, it is your turn to provide a quick feedback. Provide a single sentence as feedback regarding another character's intended action, as if you were talking to them in-character. You can also provide an action that is guarranteed to succeed and near instantaneous, such as adjusting your glasses, or taking out a sword from its scabard.
+    <provide_feedback>
+        <other_character_name>{other_character_name}</other_character_name>
 
-    The story so far: 
-    {the_story_so_far}
-    {what_the_dm_just_told_you}
+        <turn_instructions>
+            It is your turn to provide quick feedback regarding another character's intended action, as if you were talking to them in-character.
+        </turn_instructions>
 
-    Your own character sheet: {other_character_sheet}
+        <story_so_far>
+            {the_story_so_far}
+        </story_so_far>
 
-    Character planning to act: {acting_character_name}
-    Their intended action: {intended_action}
+        <dm_info>
+            {what_the_dm_just_told_you}
+        </dm_info>
 
-    Consider:
-    - Your relationship with this character
-    - Your expertise and experience
-    - Potential risks you can see
-    - How this might affect the party
-    - What your character would actually say
-    - You do not have to agree with the character's action. Providing honest feedback and diverging opinions can lead to interesting roleplay.
+        <character_sheet>
+            {other_character_sheet}
+        </character_sheet>
 
-    Remember to offer a quick verbal feedback and/or a quick action like a nod.
-    This could be as simple as *Drawing my sword* 'Great idea! More fighting, less talking!'.
-    Do not get verbose on this, as this is not your turn to act (and that turn will come soon enough!). 
-    Keep it concise and in-character. This quick feedback should be very unique to your character!
+        <acting_character>
+            <name>{acting_character_name}</name>
+            <intended_action>{intended_action}</intended_action>
+        </acting_character>
+
+        <feedback_guidelines>
+            - Use story_so_far and dm_info to frame your feedback with relevant background knowledge, especially regarding relationships and current stakes.
+            - Tailor feedback based on your character’s personality and expertise in character_sheet, while considering any visible risks in the intended_action.
+            - Keep feedback concise and in-character, providing a quick verbal response or minor action (like nodding or drawing a weapon).
+
+            This feedback should be authentic to your character’s view, even if it disagrees with the intended action.
+        </feedback_guidelines>
+    </provide_feedback>
     """,
     response_model=None  # Replace with appropriate Pydantic model if needed
 )
+
 
 task__make_decision = Task(
     description="Make your final decision on what you will attempt, considering party feedback",
@@ -251,7 +303,7 @@ task__make_decision = Task(
     response_model=None  # Replace with appropriate Pydantic model if needed
 )
 
-task__describe_initial_situation = Task(
+task__describe_initial_situation_chatty = Task(
     description="Describe the current situation to the player",
     prompt_template="""
     This is the beginning of {character_name} turn. 
@@ -275,6 +327,36 @@ task__describe_initial_situation = Task(
     """,
     response_model=None  # Replace with appropriate Pydantic model if needed
 )
+
+task__describe_initial_situation = Task(
+    description="Describe the current situation to the player briefly",
+    prompt_template="""
+    <describe_initial_situation>
+        <character_name>{character_name}</character_name>
+
+        <turn_instructions>
+            Provide a succinct description to set up {character_name}'s next turn. Use minimal detail—focus only on key elements that affect immediate decisions.
+        </turn_instructions>
+
+        <story_so_far>
+            {the_story_so_far}
+        </story_so_far>
+
+        <character_sheet>
+            {character_sheet}
+        </character_sheet>
+
+        <scene_guidelines>
+            - Use 2-3 sentences only.
+            - Describe the essentials, like major threats, opportunities, and any urgent changes in the environment.
+            - Avoid embellishing details or background information unless it's critical.
+            - Highlight {character_name}'s immediate options or cues to guide their next action.
+        </scene_guidelines>
+    </describe_initial_situation>
+    """,
+    response_model=None  # Replace with appropriate Pydantic model if needed
+)
+
 
 task__describe_situation = Task(
     description="Describe the current situation to the player in a few lines",
@@ -318,82 +400,127 @@ class DifficultyAssessment(BaseModel):
 task__assess_difficulty = Task(
     description="Assess the difficulty of a character's proposed action",
     prompt_template="""
-    Assess the difficulty of {character_name}'s proposed action.
+    <difficulty_assessment>
+        <character_name>{character_name}</character_name>
 
-    The story so far:
-    {the_story_so_far}
-    {what_you_just_told_the_player}
+        <story_so_far>
+            {the_story_so_far}
+        </story_so_far>
 
-    {character_name}'s proposed action: {proposed_action}
-    {character_name}'s character sheet: {character_sheet}
+        <dm_response>
+            {what_you_just_told_the_player}
+        </dm_response>
 
-    Assess how difficult this action would be to accomplish for {character_name}. 
-    Consider:
-    - {character_name}'s capabilities and equipment
-    - The situation and environment
-    - Any relevant previous actions or consequences
-    - Whether this even needs a roll (simple actions might auto-succeed)
+        <proposed_action>{proposed_action}</proposed_action>
+        <character_sheet>{character_sheet}</character_sheet>
 
-    Reply only as a JSON object with the following fields:
-    - difficulty: A description of the difficulty taken from [auto_succeed, easy, average, hard, super_hard, auto_fail]
-    - reasoning: Explanation of why you chose this difficulty
+        <assessment_guidelines>
+            - Use character_sheet to evaluate capabilities and equipment relevant to proposed_action.
+            - Reference story_so_far and dm_response to account for environmental factors or recent consequences.
 
+            Assess and respond in JSON format:
+            - difficulty: Describe as auto_succeed, easy, average, hard, super_hard, or auto_fail.
+            - reasoning: Explain based on character capabilities, environment, and action complexity.
+        </assessment_guidelines>
+    </difficulty_assessment>
     """,
     response_model=DifficultyAssessment
 )
 
+
 task__answer_questions = Task(
     description="Answer the character's questions based on the game's progress",
     prompt_template="""
-    Answer {character_name}'s questions in context of the game played so far
+    <answer_questions>
+        <character_name>{character_name}</character_name>
 
-    The story so far: 
-    {the_story_so_far}
-    {what_you_just_told_the_player}
+        <story_so_far>
+            {the_story_so_far}
+        </story_so_far>
 
-    {character_name}'s character sheet: {character_sheet}
-    {character_name}'s questions: {questions}
+        <dm_response>
+            {what_you_just_told_the_player}
+        </dm_response>
 
-    Answer these questions while considering:
-    - Where {character_name} is positioned and what they can see, especially compared to other characters in the Party
-    - What {character_name} could reasonably know or perceive at a simple glance
-    - Information they've gained through previous actions
-    - Maintaining mystery where appropriate
-    - Providing useful but not complete information
-    - Do not make {character_name} or other characters say or do anything while answering the questions. Only provide information.
+        <character_sheet>{character_sheet}</character_sheet>
+        <questions>{questions}</questions>
+
+        <answer_guidelines>
+            - Use dm_response and story_so_far to answer questions in the context of recent events.
+            - Refer to character_sheet to gauge what knowledge or perceptions are reasonable for the character.
+            - Maintain a balance between helpful hints and preserving mystery.
+
+            Only provide answers, without assuming any character actions or reactions.
+        </answer_guidelines>
+    </answer_questions>
+    """,
+    response_model=None  # Replace with appropriate Pydantic model if needed
+)
+
+task__resolve_action_chatty = Task(
+    description="Resolve the character's action based on the roll result",
+    prompt_template="""
+    <resolve_action>
+        <character_name>{character_name}</character_name>
+
+        <story_so_far>
+            {the_story_so_far}
+        </story_so_far>
+
+        <dm_response>
+            {what_you_just_told_the_player}
+        </dm_response>
+
+        <character_sheet>{character_sheet}</character_sheet>
+        <proposed_action>{proposed_action}</proposed_action>
+        <difficulty_assessment>{difficulty_assessment}</difficulty_assessment>
+        <roll_result>{roll}</roll_result>
+        <success_threshold>{success_threshold}</success_threshold>
+        <did_roll_succeed>{did_roll_succeed}</did_roll_succeed>
+
+        <resolution_guidelines>
+            - Use character_sheet to tailor the description of success or failure based on capabilities.
+            - Refer to story_so_far and dm_response for environmental factors and previous effects.
+            - Consider the difficulty_assessment and roll outcome to show the degree of success or failure.
+
+            Resolve in 2-3 sentences, addressing the entire party.
+        </resolution_guidelines>
+    </resolve_action>
     """,
     response_model=None  # Replace with appropriate Pydantic model if needed
 )
 
 task__resolve_action = Task(
-    description="Resolve the character's action based on the roll result",
+    description="Resolve the character's action briefly based on the roll result",
     prompt_template="""
-    Describe how {character_name}'s action plays out based on the roll. Be succint.
+    <resolve_action>
+        <character_name>{character_name}</character_name>
 
-    The story so far: 
-    <the_story_so_far>
-    {the_story_so_far}
-    {what_you_just_told_the_player}
-    </the_story_so_far>
+        <story_so_far>
+            {the_story_so_far}
+        </story_so_far>
 
-    {character_name}'s character sheet: {character_sheet}
-    {character_name}'s proposed action: {proposed_action}
+        <dm_response>
+            {what_you_just_told_the_player}
+        </dm_response>
 
-    Your difficulty assessment for this action: {difficulty_assessment}
-    Roll result: {roll}. Note: must be smaller than {success_threshold} to succeed.
-    Success: {did_roll_succeed}
+        <character_sheet>{character_sheet}</character_sheet>
+        <proposed_action>{proposed_action}</proposed_action>
+        <difficulty_assessment>{difficulty_assessment}</difficulty_assessment>
+        <roll_result>{roll}</roll_result>
+        <success_threshold>{success_threshold}</success_threshold>
+        <did_roll_succeed>{did_roll_succeed}</did_roll_succeed>
 
-    Describe how the action plays out for {character_name}, considering:
-    - The degree of success or failure (based on roll)
-    - {character_name}'s capabilities and approach
-    - Environmental factors and circumstances
-    - Maintaining forward momentum
-    - Creating interesting consequences
-
-    However, do not repeat decriptions or facts that appear in the story_so_far since it is fresh in the player's mind.
+        <resolution_guidelines>
+            - Describe the action outcome in 2-3 sentences.
+            - Focus on the immediate effect and impact on the party; avoid extra detail.
+            - Only describe what’s necessary for the story to progress and create a clear transition to the next player's turn.
+        </resolution_guidelines>
+    </resolve_action>
     """,
     response_model=None  # Replace with appropriate Pydantic model if needed
 )
+
 
 # Initialize agents in a straightforward manner
 chronicler_agent = Agent(
@@ -473,9 +600,11 @@ dm_agent = Agent(
     - Combat: dynamic and tactical
     - Narrative: balanced between story and game mechanics
     - Difficulty: fair but challenging
+    - Succint: provide enough detail without overwhelming. You let the players ask for more details if they want. 
+    You tell in a couple of sentances what the players see and what they can do.
 
     Core principles:
-    - Never decide for the players, always ask what they want to do
+    - Never decide for the players, always let them choose what they want to do
     - Keep the game balanced and interesting
     - Maintain consistency in the world and NPCs
     - Provide clear information for decision-making
@@ -487,9 +616,28 @@ dm_agent = Agent(
     - On success, describe how they accomplish their goal, possibly with minor complications
     - On failure, describe how they fall short, but keep the story moving forward
     - Always maintain narrative momentum regardless of success or failure
+    - Be succint and to the point, do not get verbose on descriptions or repeating details that are already known to the players.
     """
 )
 
+less_chatty_dm = Agent(
+    name="Less Chatty Dungeon Master",
+    model="openai|gpt-4o-mini",
+    temperature=0.5,
+    system_prompt="""
+    You are a concise Dungeon Master who focuses on brief, impactful descriptions to keep the action moving quickly. 
+    Use short, vivid sentences to provide essential details, especially when resolving actions or describing situations mid-story.
+    
+    Your key principles:
+    - Limit responses to 2-3 sentences when brief descriptions are sufficient.
+    - Avoid lengthy narratives; instead, focus on advancing the action with minimal detail.
+    - Describe outcomes and immediate consequences clearly, but avoid excessive detail.
+    - Let players ask for additional information if needed; offer only what’s essential to proceed.
+
+    Exceptions:
+    - At the start of a new scene or major event, you can provide a slightly more detailed description.
+    """
+)
 
 
 enforcer_agent = Agent(
