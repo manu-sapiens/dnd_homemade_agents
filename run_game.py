@@ -7,9 +7,9 @@ from qasync import QEventLoop
 from PyQt5.QtWidgets import QInputDialog, QApplication
 import logging
 # ----------------------------------------------
-from dnd.dnd_agents import Agent, player_agent, chronicler_agent, dm_agent, enforcer_agent
+from dnd.dnd_agents import Agent, player_agent, chronicler_agent, dm_agent, enforcer_agent, less_chatty_dm
 from dnd.game_master import GameMaster, PlayerCharacter, CharacterSheet
-from audio.tts_elevenlabs import elevenlabs_tts, tts_initialize, flush_audio_queue, playback_worker, audio_queue
+from audio.tts_elevenlabs import tts_initialize, flush_audio_queue, playback_worker, audio_queue
 from core.job_manager import (
     initialize_workers,
     enqueue_llm_job,
@@ -23,10 +23,13 @@ from core.job_manager import (
 
 DM_VOICE = "N2lVS1w4EtoT3dr4eOWO" # Callum's voice
 SKIP_INTRO = False
-logger = logging.getLogger(__name__)
+logger =  None
 # ----------------------------------------------
 # Example of running the game
-async def main(initial_situation, connected_clients):
+async def main(initial_situation, connected_clients, console_logger):
+
+    logger = console_logger
+    logger.info("LOGGER = %s", logger)
 
     logger.info("MAIN")
     logger.info("Starting the game...")
@@ -113,25 +116,25 @@ async def main(initial_situation, connected_clients):
         player_characters = [brussae, shadowstep, eldara]
 
         game_master = GameMaster(
-            dm_agent=dm_agent,
+            dm_agent=less_chatty_dm,
             player_characters=player_characters,
             chronicler_agent=chronicler_agent,
             enforcer_agent=enforcer_agent,
             initial_situation=initial_situation,
-            dm_voice=DM_VOICE 
+            dm_voice=DM_VOICE
         )
         
         if SKIP_INTRO==False: await enqueue_tts_job("Welcome to the game! I am the Dungeon Master. Let's begin.", DM_VOICE)
-        if SKIP_INTRO==False: await enqueue_tts_job(initial_situation, DM_VOICE)
+        #if SKIP_INTRO==False: await enqueue_tts_job(initial_situation, DM_VOICE)
 
         logger.info("Starting the game... v 0.22 \n--------------------\n")
         logger.info(initial_situation)
         logger.info("---------")
 
-        if False:
+        if True:
             the_story_so_far = initial_situation
             for player in player_characters:
-                the_story_so_far = await game_master.execute_player_turn(player, the_story_so_far, logger)
+                the_story_so_far = await game_master.execute_player_turn(player, the_story_so_far, logger, connected_clients)
                 logger.info("-------the story so far -------------\n")
                 logger.info(the_story_so_far)
                 logger.info("---------and now...-----------\n")        
@@ -149,7 +152,7 @@ async def main(initial_situation, connected_clients):
         logger.info(f"Error in main: {e}")
     finally:
         await audio_queue.put(None)  # Send termination signal to playback worker
-        await playback_task  # Ensure playback task completes
+        #await playback_task  # Ensure playback task completes
         logger.info("Playback worker terminated.")
     #
     logger.info("DONE DONE: main")

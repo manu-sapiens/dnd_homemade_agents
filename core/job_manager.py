@@ -8,7 +8,7 @@ import uuid
 import os
 import shutil
 # ----------------------------------------------
-from audio.tts_elevenlabs import play_audio_file, text_to_speech_stream
+from audio.tts_elevenlabs import play_audio_file, text_to_speech_stream, handle_audio_file
 
 user_input_event = asyncio.Event()
 user_input_value = "<nothing>"
@@ -64,30 +64,35 @@ async def tts_worker(connected_clients):
     while True:
         text, voice_id = await tts_queue.get()
         try:
-            print(f"Enqueuing audio for text: '{text}' with voice_id: '{voice_id}'")
+            print(f"TTSWORKER<<<<: Enqueuing audio for text: '{text}' with voice_id: '{voice_id}'")
 
             file_path = await text_to_speech_stream(text, voice_id)
-            print(f"Generated audio file: {file_path}")
+            print(f"TTSWORKER<<<< Generated audio file: {file_path}")
+            await handle_audio_file(text, voice_id, file_path, connected_clients)
+            print("TTSWORKER<<<< Audio file handled.")
 
-            # Save file to static/audio directory with a unique name
-            file_name = f"{uuid.uuid4()}.mp3"
-            static_path = os.path.join("static/audio", file_name)
-            shutil.copy2(file_path, static_path)
-            print(f"Copied audio file to: {static_path}")
+            if False:
+                # Save file to static/audio directory with a unique name
+                file_name = f"{uuid.uuid4()}.mp3"
+                static_path = os.path.join("static/audio", file_name)
+                shutil.copy2(file_path, static_path)
+                print(f"Copied audio file to: {static_path}")
 
-            # Construct the accessible audio URL
-            audio_url = f"http://localhost:8000/static/audio/{file_name}"
-            print(f"Audio URL: {audio_url}")
+                # Construct the accessible audio URL
+                audio_url = f"http://localhost:8000/static/audio/{file_name}"
+                print(f"Audio URL: {audio_url}")
 
-            # Send the audio URL to all connected WebSocket clients
-            for client in connected_clients:
-                try:
-                    print("Sending audio URL to client.")
-                    await client.send_text(f"AUDIO:{audio_url}")
-                    print("Sent audio URL to client.")
-                except Exception as e:
-                    print(f"Failed to send audio to client: {e}")
-                    connected_clients.remove(client)  # Remove client on error
+                # Send the audio URL to all connected WebSocket clients
+                for client in connected_clients:
+                    try:
+                        print("Sending audio URL to client.")
+                        await client.send_text(f"AUDIO:{audio_url}")
+                        print("Sent audio URL to client.")
+                    except Exception as e:
+                        print(f"Failed to send audio to client: {e}")
+                        connected_clients.remove(client)  # Remove client on error
+            #
+
         except Exception as e:
             print(f"Error in TTS Worker: {e}")
         finally:
@@ -110,9 +115,24 @@ async def user_input_worker():
 
 # Functions to enqueue jobs
 async def enqueue_llm_job(agent, job, **kwargs):
+    is_human = agent.model.lower() == "human"
+    if is_human:
+        task_description = job.description
+        human_name = agent.name.upper()
+        human_generated_text = await get_user_input(f"{human_name}: {task_description}")
+        return human_generated_text
+    #
+
     result_list = []
     await llm_queue.put((agent, job, kwargs, result_list))
     await llm_queue.join()  # Wait until job is processed
+
+    print("Result list: ", result_list)
+
+    if result_list==None or len(result_list)==0:
+        print("ERROR: No result list for agent=", agent, " job=", job, kwargs)
+        return None
+    #
     return result_list[0]
 
 async def enqueue_audio_playback_job(file_path: str):

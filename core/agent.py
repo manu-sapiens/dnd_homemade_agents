@@ -235,10 +235,11 @@ class Agent:
         formatted_prompt = task.format_prompt(**kwargs)
 
         # Check if the model is "human"
-        if self.model.lower() == "human":
-            # Non-blocking user input
-            user_input = await get_user_input(f"{task.description}", user_name=self.name)
-            return user_input
+        #if self.model.lower() == "human":
+        #    # Non-blocking user input
+        #    print("Getting human input!")
+        #    user_input = await get_user_input(f"{task.description}", user_name=self.name)
+        #    return user_input
 
         # Call the model
         return await self.model_caller.call_model(

@@ -12,7 +12,7 @@ from fastapi.websockets import WebSocketDisconnect  # Add this import
 from fastapi.staticfiles import StaticFiles
 # -------------------
 from run_game import main as run_game_main
-from core.job_manager import enqueue_user_input_job, get_user_input
+from core.job_manager import enqueue_user_input_job
 # -------------------
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -37,8 +37,9 @@ connected_clients = []
 @app.on_event("startup")
 async def start_game():
     logger.info("!!!Starting game with initial situation: %s", initial_situation)  # Debug info
-    print("@@@Starting game with initial situation: ", initial_situation)  
-    asyncio.create_task(run_game_main(initial_situation, connected_clients))
+    print("@@@Starting game with initial situation: ", initial_situation) 
+    logger.info("LOGGER = %s", logger)
+    asyncio.create_task(run_game_main(initial_situation, connected_clients, logger))
 
 @app.get("/")
 async def get_console():

@@ -13,7 +13,6 @@ import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
-
 # Initialize a ThreadPoolExecutor for playback
 executor = ThreadPoolExecutor(max_workers=1)
 
@@ -136,11 +135,12 @@ async def play_audio_file(file_path: str):
     await asyncio.get_running_loop().run_in_executor(executor, play, audio)
 
 # Enqueue audio with error tracking
-async def enqueue_audio(text: str, voice_id: str = "pNInz6obpgDQGcFmaJgB"):
+async def enqueue_audio(text: str, connected_clients, voice_id: str = "pNInz6obpgDQGcFmaJgB"):
     try:
         # Generate the audio file
         file_path = await text_to_speech_stream(text, voice_id=voice_id)
-        print(f"Enqueued audio for text: '{text}' with voice_id: '{voice_id}'") # Debug info
+        print(f"enqueue_audio!!! ===> Enqueued audio for text: '{text}' with voice_id: '{voice_id}'") # Debug info
+        await handle_audio_file(text, voice_id, file_path, connected_clients)
 
         if False:
             # Move file to static/audio directory with a unique name
@@ -162,19 +162,19 @@ async def enqueue_audio(text: str, voice_id: str = "pNInz6obpgDQGcFmaJgB"):
                 await client.send_text(f"AUDIO:{audio_url}")
                 print("Sent audio URL to client.")
             #
-        else:
-            print("!!! HOW DID WE GET HERE? !!!")
+        #else:
+        #    print("!!! HOW DID WE GET HERE? !!!")
         #
 
     except Exception as e:
-        logger.error(f"Error in enqueue_audio for text: '{text}' with voice_id: '{voice_id}'. Exception: {e}")
-        print(f"Error in enqueue_audio for text: '{text}' with voice_id: '{voice_id}'. Exception: {e}")
+        logger.error(f"Error in enqueue audio for text: '{text}' with voice_id: '{voice_id}'. Exception: {e}")
+        print(f"Error in enqueue audio for text: '{text}' with voice_id: '{voice_id}'. Exception: {e}")
     #
 #
 
-async def elevenlabs_tts(text: str, voice_id: str = "pNInz6obpgDQGcFmaJgB") -> None:
-    # Schedule enqueue_audio as a background task with error tracking
-    task = asyncio.create_task(enqueue_audio(text, voice_id))
+async def elevenlabs_tts(text: str, connected_clients, voice_id: str = "pNInz6obpgDQGcFmaJgB") -> None:
+    # Schedule enqueue audio as a background task with error tracking
+    task = asyncio.create_task(enqueue_audio(text, connected_clients, voice_id))
     task.set_name(f"tts_task_{len(background_tasks) + 1}")
     task.add_done_callback(task_done_callback)  # Callback to remove task upon completion
     background_tasks.append(task)
@@ -249,20 +249,32 @@ async def tts_initialize():
     # asyncio.create_task(playback_worker())
 #
 
-# Example usage
-async def main():
-    
-    await enqueue_audio("Hello, this is the first test.", voice_id="pNInz6obpgDQGcFmaJgB")
-    await enqueue_audio("And here is the second test.", voice_id="pNInz6obpgDQGcFmaJgB")
+async def handle_audio_file(text:str, voice_id:str, file_path: str, connected_clients):
+    print(f"Enqueuing audio for text: '{text}' with voice_id: '{voice_id}'")
 
-    # Flush remaining audio before program ends
-    await flush_audio_queue()
-    print("All audio flushed and program complete.")
-#
+    file_path = await text_to_speech_stream(text, voice_id)
+    print(f"Generated audio file: {file_path}")
 
+    # Save file to static/audio directory with a unique name
+    file_name = f"{uuid.uuid4()}.mp3"
+    static_path = os.path.join("static/audio", file_name)
+    shutil.copy2(file_path, static_path)
+    print(f"Copied audio file to: {static_path}")
 
+    # Construct the accessible audio URL
+    audio_url = f"http://localhost:8000/static/audio/{file_name}"
+    print(f"Audio URL: {audio_url}")
 
-
+    # Send the audio URL to all connected WebSocket clients
+    print(f"Connected clients: {connected_clients}")
+    for client in connected_clients:
+        try:
+            print("Sending audio URL to client.")
+            await client.send_text(f"AUDIO:{audio_url}")
+            print("Sent audio URL to client.")
+        except Exception as e:
+            print(f"Failed to send audio to client: {e}")
+            connected_clients.remove(client)  # Remove client on error
 
 
 
