@@ -4,9 +4,11 @@ from concurrent.futures import ThreadPoolExecutor
 from PyQt5.QtWidgets import QInputDialog, QApplication
 from typing import Callable
 import sys
+import uuid
+import os
+import shutil
 # ----------------------------------------------
 from audio.tts_elevenlabs import play_audio_file, text_to_speech_stream
-
 
 user_input_event = asyncio.Event()
 user_input_value = "<nothing>"
@@ -25,10 +27,10 @@ audio_executor = ThreadPoolExecutor(max_workers=2)  # Dedicated executor for aud
 main_thread_executor = ThreadPoolExecutor(max_workers=1)  # For GUI operations (e.g., user input)
 
 # Function to initialize all workers
-async def initialize_workers():
+async def initialize_workers(clients):
     asyncio.create_task(llm_worker())
     asyncio.create_task(audio_playback_worker())
-    asyncio.create_task(tts_worker())
+    asyncio.create_task(tts_worker(clients))
     asyncio.create_task(user_input_worker())
 
 # LLM Worker
@@ -58,11 +60,34 @@ async def audio_playback_worker():
         await asyncio.sleep(1)
 
 # TTS Worker
-async def tts_worker():
+async def tts_worker(connected_clients):
     while True:
         text, voice_id = await tts_queue.get()
         try:
-            await text_to_speech_stream(text, voice_id)
+            print(f"Enqueuing audio for text: '{text}' with voice_id: '{voice_id}'")
+
+            file_path = await text_to_speech_stream(text, voice_id)
+            print(f"Generated audio file: {file_path}")
+
+            # Save file to static/audio directory with a unique name
+            file_name = f"{uuid.uuid4()}.mp3"
+            static_path = os.path.join("static/audio", file_name)
+            shutil.copy2(file_path, static_path)
+            print(f"Copied audio file to: {static_path}")
+
+            # Construct the accessible audio URL
+            audio_url = f"http://localhost:8000/static/audio/{file_name}"
+            print(f"Audio URL: {audio_url}")
+
+            # Send the audio URL to all connected WebSocket clients
+            for client in connected_clients:
+                try:
+                    print("Sending audio URL to client.")
+                    await client.send_text(f"AUDIO:{audio_url}")
+                    print("Sent audio URL to client.")
+                except Exception as e:
+                    print(f"Failed to send audio to client: {e}")
+                    connected_clients.remove(client)  # Remove client on error
         except Exception as e:
             print(f"Error in TTS Worker: {e}")
         finally:

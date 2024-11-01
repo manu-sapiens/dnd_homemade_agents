@@ -13,6 +13,7 @@ import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
+
 # Initialize a ThreadPoolExecutor for playback
 executor = ThreadPoolExecutor(max_workers=1)
 
@@ -90,6 +91,8 @@ async def text_to_speech_stream(text: str, voice_id: str = "pNInz6obpgDQGcFmaJgB
             session_file_path = os.path.join(output_dir, os.path.basename(common_file_path))
             if not os.path.exists(session_file_path):
                 shutil.copy2(common_file_path, session_file_path)
+
+            print(f"Returning path={session_file_path} cached audio for text: '{text}' <--------------")
             return session_file_path
 
     # Generate new audio if not cached
@@ -135,11 +138,39 @@ async def play_audio_file(file_path: str):
 # Enqueue audio with error tracking
 async def enqueue_audio(text: str, voice_id: str = "pNInz6obpgDQGcFmaJgB"):
     try:
-        # Call the original enqueue_audio functionality here
+        # Generate the audio file
         file_path = await text_to_speech_stream(text, voice_id=voice_id)
-        await audio_queue.put(file_path)
+        print(f"Enqueued audio for text: '{text}' with voice_id: '{voice_id}'") # Debug info
+
+        if False:
+            # Move file to static/audio directory with a unique name
+            file_name = f"{uuid.uuid4()}.mp3"  # Generate a unique name for each file
+            static_path = os.path.join("static/audio", file_name)
+            # copy2 instead of move to keep the original file
+            shutil.copy2(file_path, static_path)
+            #os.rename(file_path, static_path)
+
+            print(f"Copied audio file to: {static_path}")
+            
+            # Construct the URL for the client to access the audio file
+            audio_url = f"http://localhost:8000/static/audio/{file_name}"
+            print(f"Audio URL: {audio_url}")
+
+            # Send the audio URL to all connected WebSocket clients
+            for client in connected_clients:
+                print("sending audio URL to client.")
+                await client.send_text(f"AUDIO:{audio_url}")
+                print("Sent audio URL to client.")
+            #
+        else:
+            print("!!! HOW DID WE GET HERE? !!!")
+        #
+
     except Exception as e:
         logger.error(f"Error in enqueue_audio for text: '{text}' with voice_id: '{voice_id}'. Exception: {e}")
+        print(f"Error in enqueue_audio for text: '{text}' with voice_id: '{voice_id}'. Exception: {e}")
+    #
+#
 
 async def elevenlabs_tts(text: str, voice_id: str = "pNInz6obpgDQGcFmaJgB") -> None:
     # Schedule enqueue_audio as a background task with error tracking
@@ -158,6 +189,7 @@ async def await_all_tasks_complete():
         logger.info("No background tasks to wait for.")
 
 async def playback_worker():
+    
     print("Playback worker started.")
     while True:
         print("Inside the playback worker loop.")

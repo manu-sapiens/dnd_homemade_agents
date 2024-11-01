@@ -26,13 +26,13 @@ SKIP_INTRO = False
 logger = logging.getLogger(__name__)
 # ----------------------------------------------
 # Example of running the game
-async def main(initial_situation):
+async def main(initial_situation, connected_clients):
 
     logger.info("MAIN")
     logger.info("Starting the game...")
     try:
         logger.info("Inializing workers..")
-        await initialize_workers()  # Initialize all job workers
+        await initialize_workers(connected_clients)  # Initialize all job workers
 
 
         await tts_initialize()

@@ -1,24 +1,30 @@
 # server.py
-
+# -------------------
 import asyncio
 import yaml
+import sys
+import logging
+import os
+# -------------------
 from fastapi import FastAPI, WebSocket, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.websockets import WebSocketDisconnect  # Add this import
-
-from run_game import main as run_game_main
-import sys
-import logging
+from fastapi.staticfiles import StaticFiles
 # -------------------
+from run_game import main as run_game_main
 from core.job_manager import enqueue_user_input_job, get_user_input
 # -------------------
-
-
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
+
+# Ensure the audio directory exists
+os.makedirs("static/audio", exist_ok=True)
+
+# Mount the static files route
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Load the initial situation from YAML
 with open("game_config.yaml", "r") as f:
@@ -32,7 +38,7 @@ connected_clients = []
 async def start_game():
     logger.info("!!!Starting game with initial situation: %s", initial_situation)  # Debug info
     print("@@@Starting game with initial situation: ", initial_situation)  
-    asyncio.create_task(run_game_main(initial_situation))
+    asyncio.create_task(run_game_main(initial_situation, connected_clients))
 
 @app.get("/")
 async def get_console():
@@ -162,6 +168,23 @@ html_content = """
         userInput.value = "";  // Clear input field
       }
     }
+
+    ws.onmessage = function(event) {
+        const message = event.data;
+
+        if (message.startsWith("AUDIO:")) {
+            const audioUrl = message.replace("AUDIO:", "").trim();
+            console.log("Playing audio from:", audioUrl);  // Debug message
+            const audio = new Audio(audioUrl);  // Create a new Audio object
+            audio.play();  // Play the audio
+        } else {
+            // Handle other messages as before
+            const messageElement = document.createElement("div");
+            messageElement.textContent = message;
+            document.getElementById("console").appendChild(messageElement);
+            document.getElementById("console").scrollTop = consoleDiv.scrollHeight;
+        }
+    }; 
   </script>
 </body>
 </html>
