@@ -132,6 +132,53 @@ html_content = """
     const userInput = document.getElementById("user-input");
     const ws = new WebSocket("ws://localhost:8000/ws");
 
+    const audioQueue = [];  // Queue to store audio URLs
+    let isPlaying = false;  // Flag to check if audio is currently playing
+
+    // Function to play the next audio in the queue
+    function playNextAudio() {
+        // Check if already playing or queue is empty
+        console.log("Playing next audio...");
+        console.log("Is Playing: ", isPlaying)
+        console.log("Audio Queue Length: ", audioQueue.length)
+        
+        if (isPlaying || audioQueue.length === 0) return;
+
+        isPlaying = true;  // Set flag to indicate that audio is playing
+        const audioUrl = audioQueue.shift();  // Get the next audio URL
+
+        const audio = new Audio(audioUrl);
+        audio.play();
+
+        // Event listener to handle when audio finishes
+        audio.onended = function() {
+            isPlaying = false;  // Reset flag
+            playNextAudio();    // Play the next audio in the queue
+        };
+
+        // Optional: Handle audio errors to avoid playback blocking
+        audio.onerror = function() {
+            console.error("Error playing audio:", audioUrl);
+            isPlaying = false;
+            playNextAudio();  // Try to play the next audio even if there's an error
+        };
+    }
+
+    // Confirm WebSocket connection
+    ws.onopen = function() {
+        console.log("WebSocket connection established.");
+    };
+
+    // WebSocket error handling
+    ws.onerror = function(error) {
+        console.error("WebSocket error:", error);
+    };
+
+    // WebSocket close handling
+    ws.onclose = function() {
+        console.log("WebSocket connection closed.");
+    };
+
     // Display incoming messages
     ws.onmessage = function(event) {
       const message = event.data;
@@ -144,21 +191,6 @@ html_content = """
       consoleDiv.scrollTop = consoleDiv.scrollHeight;
     };
 
-    // Confirm connection
-    ws.onopen = function() {
-      console.log("WebSocket connection established.");  // Debug info
-    };
-
-    // WebSocket error handling
-    ws.onerror = function(error) {
-      console.error("WebSocket error:", error);  // Debug info
-    };
-
-    // WebSocket close handling
-    ws.onclose = function() {
-      console.log("WebSocket connection closed.");  // Debug info
-    };
-
     // Send user input to the server
     function handleKeyPress(event) {
       if (event.key === "Enter") {
@@ -169,22 +201,30 @@ html_content = """
       }
     }
 
+      // WebSocket message handler
     ws.onmessage = function(event) {
         const message = event.data;
 
         if (message.startsWith("AUDIO:")) {
             const audioUrl = message.replace("AUDIO:", "").trim();
-            console.log("Playing audio from:", audioUrl);  // Debug message
-            const audio = new Audio(audioUrl);  // Create a new Audio object
-            audio.play();  // Play the audio
+            console.log("---> Received audio URL:", audioUrl);
+
+            // Add audio URL to the queue and attempt to play
+            console.log("Adding audio to queue:", audioUrl);
+            console.log("Audio Queue Length:", audioQueue.length);
+            console.log("Is Playing:", isPlaying);
+
+            audioQueue.push(audioUrl);
+            playNextAudio();  // Start playback if not already playing
         } else {
-            // Handle other messages as before
+            // Handle other messages as usual
             const messageElement = document.createElement("div");
             messageElement.textContent = message;
             document.getElementById("console").appendChild(messageElement);
             document.getElementById("console").scrollTop = consoleDiv.scrollHeight;
         }
-    }; 
+    };
+
   </script>
 </body>
 </html>
