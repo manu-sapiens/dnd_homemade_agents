@@ -20,7 +20,7 @@ from core.job_manager import (
     enqueue_llm_job,
     enqueue_audio_playback_job,
     enqueue_tts_job,
-    enqueue_user_input_job,
+    get_user_input,
     app
 )# ----------------------------------------------
 
@@ -39,7 +39,7 @@ async def tts(text: str, voice_id: str = "pNInz6obpgDQGcFmaJgB") -> None:
 
 async def enforce_dm(enforcer_agent, original_text:str) -> str:
 
-    print("DM[*]:")
+    logger.info("DM[*]:")
     edited_text = await enqueue_llm_job(
                 enforcer_agent,
                 task__enforce_dm,
@@ -53,7 +53,7 @@ async def enforce_dm(enforcer_agent, original_text:str) -> str:
 
 async def enforce_player(enforcer_agent, original_text:str, player_name) -> str:
     
-    print(f"{player_name.upper()}[*]:")        
+    logger.info(f"{player_name.upper()}[*]:")        
     edited_text = await enqueue_llm_job(
                 enforcer_agent,
                 task__enforce_player,
@@ -89,7 +89,7 @@ def color_diff(original, edited):
             result.append(f"{RED_STRIKETHROUGH}{item[2:]}{RESET}")
 
     # Join list into a single string with spaces and print to console
-    print(" ".join(result))
+    logger.info(" ".join(result))
 #
 
 DEFAULT_PLAYERS_MODEL = "openai|gpt-4o-mini"
@@ -171,7 +171,7 @@ class GameMaster:
     #
 
     
-    async def execute_player_turn(self, player: PlayerCharacter, the_story_so_far:str) -> None:
+    async def execute_player_turn(self, player: PlayerCharacter, the_story_so_far:str, logger) -> None:
         
         this_turn_narrative = the_story_so_far +"\n"
 
@@ -184,12 +184,12 @@ class GameMaster:
         other_characters = self._format_other_characters(character_name)
         situation = self.state.current_situation
 
-        print(f"\n=== {character_name}'s Turn ===")
+        logger.info(f"\n=== {character_name}'s Turn ===")
 
         try:
             generated__situation_description = ""
             if self.very_first_time:
-                print("\n# 1. DM describes the situation FOR THE FIRST TIME\n")
+                logger.info("\n# 1. DM describes the situation FOR THE FIRST TIME\n")
                 generated__situation_description = await enqueue_llm_job(
                     self.agent__dm,
                     task__describe_situation,
@@ -205,11 +205,11 @@ class GameMaster:
 
 
             new_narrative = f"\nDM:\n{generated__situation_description}\n"
-            #print(new_narrative)
+            #logger.info(new_narrative)
             this_turn_narrative += new_narrative
             self.very_first_time = False
 
-            print("\n# 2. Player asks questions\n")
+            logger.info("\n# 2. Player asks questions\n")
             if VERBOSE: await tts(f"{character_name}, do you have any questions?", self.dm_voice)
 
             generated__questions = await enqueue_llm_job(
@@ -225,10 +225,10 @@ class GameMaster:
             new_narrative = f"\n{character_name.upper()}:\n{generated__questions}\n"
             if VERBOSE: await tts(generated__questions, character_voice)
 
-            print(new_narrative)
+            logger.info(new_narrative)
             this_turn_narrative += new_narrative
 
-            print("\n# 3. DM answers questions\n")
+            logger.info("\n# 3. DM answers questions\n")
             generated__answers = await enqueue_llm_job(
                 self.agent__dm,
                 task__answer_questions,
@@ -244,10 +244,10 @@ class GameMaster:
             if VERBOSE: await tts(generated__answers, self.dm_voice)
 
             new_narrative = f"\nDM:\n{generated__answers}\n"
-            #print(new_narrative)
+            #logger.info(new_narrative)
             this_turn_narrative += new_narrative
 
-            print("\n# 4. Player declares intent\n")
+            logger.info("\n# 4. Player declares intent\n")
             generated__intent = await enqueue_llm_job(
                 agent__player,
                 task__declare_intent,
@@ -261,10 +261,10 @@ class GameMaster:
             )
             await tts(generated__intent, character_voice)
             new_narrative = f"\n{character_name.upper()}:\n{generated__intent}\n"
-            print(new_narrative)
+            logger.info(new_narrative)
             this_turn_narrative += new_narrative
 
-            print("\n# 5. Other players provide feedback\n")
+            logger.info("\n# 5. Other players provide feedback\n")
             generated__feedbacks = []
             for other_player in self.player_characters:
                 other_name = other_player.character_name
@@ -275,7 +275,7 @@ class GameMaster:
 
                 if other_name != character_name:
 
-                    print(f"\n...")
+                    logger.info(f"\n...")
                     await tts(f"{other_name}?", character_voice)
                     generated__player_feedback = await enqueue_llm_job(
                         other_agent,
@@ -295,10 +295,10 @@ class GameMaster:
                     generated__feedbacks.append((other_name, generated__player_feedback))
 
                     new_narrative = f"\n\n{other_name.upper()}:\n{generated__player_feedback}\n\n"
-                    #print(new_narrative)
+                    #logger.info(new_narrative)
                     this_turn_narrative += new_narrative
 
-            print("\n# 6. Player makes final decision\n")
+            logger.info("\n# 6. Player makes final decision\n")
             generated__final_action = await enqueue_llm_job(
                 agent__player,
                 task__make_decision,
@@ -315,10 +315,10 @@ class GameMaster:
             await tts(generated__final_action, character_voice)
 
             new_narrative = f"\n{character_name.upper()}:\n{generated__final_action}\n"
-            #print(new_narrative)
+            #logger.info(new_narrative)
             this_turn_narrative += new_narrative
 
-            print("\n# 7. DM assesses difficulty\n")
+            logger.info("\n# 7. DM assesses difficulty\n")
             generated__difficulty_assessment:DifficultyAssessment = await enqueue_llm_job(
                 self.agent__dm,
                 task__assess_difficulty,
@@ -331,17 +331,17 @@ class GameMaster:
             )
             
             new_narrative = f"\nDM:\nDifficulty: {generated__difficulty_assessment.difficulty}\nReasoning: {generated__difficulty_assessment.reasoning}\n"
-            print(new_narrative)
+            logger.info(new_narrative)
             this_turn_narrative += new_narrative
 
-            print("\n# 8. Resolve action\n")
+            logger.info("\n# 8. Resolve action\n")
             difficulty_thresholds = {"auto_succeed": 100, "easy": 80, "average": 60, "hard": 40, "super_hard": 20, "auto_fail":0}.get
             success_threshold = difficulty_thresholds(generated__difficulty_assessment.difficulty)
             roll = int(random.uniform(0, 100))
             did_roll_succeed = roll <= success_threshold
 
             new_narrative = f"\nRoll is {roll}. Threshold was {success_threshold}\n"
-            print(new_narrative)
+            logger.info(new_narrative)
             this_turn_narrative += new_narrative
 
             if did_roll_succeed: 
@@ -349,7 +349,7 @@ class GameMaster:
             else: 
                 new_narrative = f"\n{character_name} fails!\n"
             #
-            print(new_narrative)
+            logger.info(new_narrative)
             await tts(new_narrative, self.dm_voice)
 
             this_turn_narrative += new_narrative
@@ -373,7 +373,7 @@ class GameMaster:
             await tts(generated__resolution, self.dm_voice)
 
             new_narrative = f"\n{generated__resolution}\n"
-            #print(new_narrative)
+            #logger.info(new_narrative)
             this_turn_narrative += new_narrative
 
             # Update game state
@@ -383,7 +383,7 @@ class GameMaster:
             return this_turn_narrative
         
         except Exception as e:
-            print(f"Error during {character_name}'s turn: {str(e)}")
+            logger.info(f"Error during {character_name}'s turn: {str(e)}")
             # halt the game here
             raise e
 

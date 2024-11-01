@@ -3,6 +3,9 @@
 import asyncio
 import argparse
 import sys
+from qasync import QEventLoop
+from PyQt5.QtWidgets import QInputDialog, QApplication
+import logging
 # ----------------------------------------------
 from dnd.dnd_agents import Agent, player_agent, chronicler_agent, dm_agent, enforcer_agent
 from dnd.game_master import GameMaster, PlayerCharacter, CharacterSheet
@@ -13,20 +16,22 @@ from core.job_manager import (
     enqueue_audio_playback_job,
     enqueue_tts_job,
     enqueue_user_input_job,
+    get_user_input,
     app
 )
-from qasync import QEventLoop
-from PyQt5.QtWidgets import QInputDialog, QApplication
 # ----------------------------------------------
 
 DM_VOICE = "N2lVS1w4EtoT3dr4eOWO" # Callum's voice
-SKIP_INTRO = True
-
+SKIP_INTRO = False
+logger = logging.getLogger(__name__)
+# ----------------------------------------------
 # Example of running the game
 async def main(initial_situation):
 
+    logger.info("MAIN")
+    logger.info("Starting the game...")
     try:
-        print("Inializing workers..")
+        logger.info("Inializing workers..")
         await initialize_workers()  # Initialize all job workers
 
 
@@ -35,32 +40,9 @@ async def main(initial_situation):
         # Start playback worker task within active event loop
         playback_task = asyncio.create_task(playback_worker())
 
-        print("Enqueuing user input job..")
-        user_input = await enqueue_user_input_job("What is the name of the DM?", user_name="DM Name",app=app)
-
-        print(f"User input: {user_input}")
-
-        # wait 5s
-        print("Waiting 5s...")
-        await asyncio.sleep(5)
-        print("Done")
-
-        # Signal the playback worker to shut down (only if you want a controlled exit)
-        await audio_queue.put(None)  # Send termination signal to playback worker
-        #await playback_task  # Wait for playback worker to finish
-
-         # Ensure playback worker finishes
-        await playback_task
-        print("Playback worker terminated.")
-
-    except Exception as e:
-        print(f"Error in main: {e}")
-    finally:
-        await playback_task  # Ensure playback task completes
-        print("Playback worker terminated.")
-    #
-    print("DONE: main")
-    if False:
+        logger.info("Enqueuing user input job..")
+        user_input = await get_user_input("What is the name of the DM?")
+        logger.info(f"User input: {user_input}")
 
         # Create player agents -------------------------------------------
 
@@ -138,27 +120,40 @@ async def main(initial_situation):
             initial_situation=initial_situation,
             dm_voice=DM_VOICE 
         )
-
-        
-
-
         
         if SKIP_INTRO==False: await enqueue_tts_job("Welcome to the game! I am the Dungeon Master. Let's begin.", DM_VOICE)
         if SKIP_INTRO==False: await enqueue_tts_job(initial_situation, DM_VOICE)
 
-        print("Starting the game... v 0.21 \n--------------------\n")
-        print(initial_situation)
-        print()
+        logger.info("Starting the game... v 0.22 \n--------------------\n")
+        logger.info(initial_situation)
+        logger.info("---------")
 
         if False:
             the_story_so_far = initial_situation
             for player in player_characters:
-                the_story_so_far = await game_master.execute_player_turn(player, the_story_so_far)
-                print("-------the story so far -------------\n")
-                print(the_story_so_far)
-                print("---------and now...-----------\n")        
+                the_story_so_far = await game_master.execute_player_turn(player, the_story_so_far, logger)
+                logger.info("-------the story so far -------------\n")
+                logger.info(the_story_so_far)
+                logger.info("---------and now...-----------\n")        
             # 
             await flush_audio_queue()   
+
+        logger.info("DONE Part 2: main")
+        # Signal the playback worker to shut down (only if you want a controlled exit)
+
+         # Ensure playback worker finishes
+        await playback_task
+        logger.info("Playback worker terminated.")
+
+    except Exception as e:
+        logger.info(f"Error in main: {e}")
+    finally:
+        await audio_queue.put(None)  # Send termination signal to playback worker
+        await playback_task  # Ensure playback task completes
+        logger.info("Playback worker terminated.")
+    #
+    logger.info("DONE DONE: main")
+
 #
 # ----------------------------------------------
 

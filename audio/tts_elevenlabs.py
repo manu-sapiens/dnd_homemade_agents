@@ -60,7 +60,9 @@ def generate_hash(text: str, voice_id: str) -> str:
 # Convert text to speech or retrieve from cache
 async def text_to_speech_stream(text: str, voice_id: str = "pNInz6obpgDQGcFmaJgB") -> str:
     file_hash = generate_hash(text, voice_id)
+    print("File hash:", file_hash)
     common_file_path = os.path.join(common_audio_dir, f"{voice_id}_{file_hash}.mp3")
+    print("Common_file_path:", common_file_path)
 
     # Check if file is already cached and in common_audio
     if file_hash in audio_cache:
@@ -76,6 +78,13 @@ async def text_to_speech_stream(text: str, voice_id: str = "pNInz6obpgDQGcFmaJgB
                 shutil.move(cached_path, common_file_path)
                 audio_cache[file_hash] = common_file_path  # Update cache to point to common_audio
                 print(f"Moved audio to common_audio for repeated use: '{text}'")
+
+                with open(cache_file, "w") as f:
+                    print("Saving audio cache to disk...")
+                    json.dump(audio_cache, f)
+
+            else:
+                print(f"Using cached audio for text: '{text}'")
 
             # Copy to session directory if not already there
             session_file_path = os.path.join(output_dir, os.path.basename(common_file_path))
@@ -112,11 +121,13 @@ async def text_to_speech_stream(text: str, voice_id: str = "pNInz6obpgDQGcFmaJgB
     
     # Save cache to disk
     with open(cache_file, "w") as f:
+        print("Saving audio cache to disk...")
         json.dump(audio_cache, f)
     
     return session_file_path
 
 async def play_audio_file(file_path: str):
+    print("Playing audio file:", file_path)
     audio = AudioSegment.from_file(file_path, format="mp3")
     # Run the play function in a separate thread
     await asyncio.get_running_loop().run_in_executor(executor, play, audio)

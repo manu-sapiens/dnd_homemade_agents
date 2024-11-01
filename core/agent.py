@@ -21,7 +21,7 @@ from core.job_manager import (
     enqueue_llm_job,
     enqueue_audio_playback_job,
     enqueue_tts_job,
-    enqueue_user_input_job,
+    get_user_input,
     app
 )
 
@@ -237,7 +237,7 @@ class Agent:
         # Check if the model is "human"
         if self.model.lower() == "human":
             # Non-blocking user input
-            user_input = await enqueue_user_input_job(f"{task.description}", user_name=self.name, app=app)
+            user_input = await get_user_input(f"{task.description}", user_name=self.name)
             return user_input
 
         # Call the model

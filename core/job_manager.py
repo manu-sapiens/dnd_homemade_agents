@@ -4,6 +4,12 @@ from concurrent.futures import ThreadPoolExecutor
 from PyQt5.QtWidgets import QInputDialog, QApplication
 from typing import Callable
 import sys
+# ----------------------------------------------
+from audio.tts_elevenlabs import play_audio_file, text_to_speech_stream
+
+
+user_input_event = asyncio.Event()
+user_input_value = "<nothing>"
 
 # Ensure QApplication is created only once
 app = QApplication.instance() or QApplication(sys.argv)
@@ -40,6 +46,7 @@ async def llm_worker():
 # Audio Playback Worker
 async def audio_playback_worker():
     while True:
+        print("Audio Playback Worker started.")
         file_path = await audio_playback_queue.get()
         try:
             await asyncio.get_running_loop().run_in_executor(audio_executor, play_audio_file, file_path)
@@ -47,6 +54,8 @@ async def audio_playback_worker():
             print(f"Error in Audio Playback Worker: {e}")
         finally:
             audio_playback_queue.task_done()
+        # wait 1s
+        await asyncio.sleep(1)
 
 # TTS Worker
 async def tts_worker():
@@ -87,39 +96,16 @@ async def enqueue_audio_playback_job(file_path: str):
 async def enqueue_tts_job(text: str, voice_id: str):
     await tts_queue.put((text, voice_id))
 
-async def enqueue_user_input_job2(prompt_text: str, user_name: str = "Player Input") -> str:
-    print("Getting user input...")
-    loop = asyncio.get_running_loop()
-    print(loop)
-    result_future = loop.create_future()
-    print(result_future)
-    print(user_input_queue)
-    await user_input_queue.put((prompt_text, user_name, result_future))
-    print("User input job enqueued.")
-    return await result_future
+async def enqueue_user_input_job(received_value: str):
+    global user_input_event, user_input_value
+    user_input_value=received_value
+    user_input_event.set()  # Signal that input has been received
 
-async def enqueue_user_input_job(prompt_text, user_name="Player Input", app=app):
+#
 
-    print("Getting user input...")
-    print("App = ", app)
-    
-    loop = asyncio.get_running_loop()
-    future = loop.create_future()  # Create a future to handle the result
-
-    def show_dialog():
-        # Run the QInputDialog directly on the main thread
-        user_input, ok = QInputDialog.getText(None, user_name, prompt_text)
-        if ok:
-            loop.call_soon_threadsafe(future.set_result, user_input)
-        else:
-            loop.call_soon_threadsafe(future.set_result, None)
-
-    # Ensure app is initialized and ready for GUI operations
-    if not app.instance():
-        app.exec_()
-
-    # Schedule show_dialog to run on the main thread
-    loop.call_soon(show_dialog)
-
-    # Await the future result without blocking the main event loop
-    return await future
+async def get_user_input(prompt):
+    global user_input_event, user_input_value
+    print(prompt)
+    user_input_event.clear()  # Reset the event
+    await user_input_event.wait()  # Wait until input is received
+    return user_input_value  # Return the stored input
